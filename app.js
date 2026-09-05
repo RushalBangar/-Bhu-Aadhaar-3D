@@ -160,6 +160,35 @@ document.getElementById('prop-parking').addEventListener('click', async () => {
     }
 });
 
+// === MOBILE CONTROLS & SIDEBAR TOGGLE ===
+const leftSidebar = document.getElementById('leftSidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+const mobileLayersBtn = document.getElementById('mobileLayersBtn');
+const mobileExplodeBtn = document.getElementById('mobileExplodeBtn');
+
+function openLeftSidebar() {
+    if (leftSidebar) leftSidebar.classList.add('open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+}
+
+function closeLeftSidebar() {
+    if (leftSidebar) leftSidebar.classList.remove('open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+}
+
+if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openLeftSidebar);
+if (mobileLayersBtn) mobileLayersBtn.addEventListener('click', openLeftSidebar);
+if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', closeLeftSidebar);
+if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeLeftSidebar);
+
+if (mobileExplodeBtn) {
+    mobileExplodeBtn.addEventListener('click', () => {
+        document.getElementById('explodeBtn')?.click();
+    });
+}
+
 // === LAYER FILTERS ===
 document.getElementById('layerBuildings').addEventListener('change', (e) => {
     window.dispatchEvent(new CustomEvent('toggle-buildings', { detail: e.target.checked }));

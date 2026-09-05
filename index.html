@@ -27,6 +27,9 @@
     <!-- Top Navigation Bar -->
     <nav class="navbar glass">
         <div class="nav-left">
+            <button class="mobile-toggle-btn mobile-only" id="mobileMenuBtn" aria-label="Open Filters & Controls">
+                <span class="material-icons-round">menu</span>
+            </button>
             <div class="logo">
                 <span class="logo-icon material-icons-round">public</span>
                 <span class="logo-text">Bhu-Aadhaar <span class="logo-3d">3D</span></span>
@@ -35,7 +38,7 @@
         <div class="nav-center">
             <div class="search-container">
                 <span class="search-icon material-icons-round">search</span>
-                <input type="text" id="searchInput" placeholder="Search by 2D ULPIN / City / Plot" autocomplete="off">
+                <input type="text" id="searchInput" placeholder="Search by 2D/3D ULPIN / City / Unit" autocomplete="off">
                 <button id="searchBtn">Search</button>
                 <div id="searchResults" class="search-results glass" style="display: none;"></div>
             </div>
@@ -52,11 +55,20 @@
         </div>
     </nav>
 
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
     <!-- Main Container -->
     <div class="main-container">
         
         <!-- Left Sidebar: Layer Filters -->
-        <aside class="sidebar left-sidebar glass">
+        <aside class="sidebar left-sidebar glass" id="leftSidebar">
+            <div class="sidebar-header mobile-only">
+                <h3><span class="material-icons-round section-icon">tune</span> Controls & Layers</h3>
+                <button class="btn-close" id="closeSidebarBtn" aria-label="Close Sidebar">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
             <div class="sidebar-section">
                 <h3><span class="material-icons-round section-icon">layers</span> Layer Filters</h3>
                 <div class="filter-group">
@@ -148,6 +160,16 @@
 
         <!-- Center: Interactive 3D WebGL Canvas -->
         <main class="canvas-container" id="canvas-container">
+            <!-- Mobile Quick Actions -->
+            <div class="mobile-floating-actions mobile-only">
+                <button id="mobileExplodeBtn" class="floating-btn" title="Toggle Exploded View" aria-label="Toggle Exploded View">
+                    <span class="material-icons-round">unfold_more</span>
+                </button>
+                <button id="mobileLayersBtn" class="floating-btn" title="Open Layer Filters" aria-label="Open Layer Filters">
+                    <span class="material-icons-round">layers</span>
+                </button>
+            </div>
+
             <!-- Three.js will render here -->
             <!-- Loading Overlay -->
             <div class="loading-overlay" id="loadingOverlay">
@@ -158,11 +180,14 @@
             </div>
         </main>
 
-        <!-- Right Sidebar: Property Inspector Card -->
+        <!-- Right Sidebar: Property Inspector Card (Bottom Sheet on Mobile) -->
         <aside class="sidebar right-sidebar glass" id="property-card" style="display: none;">
+            <div class="sheet-handle-bar mobile-only">
+                <div class="sheet-handle"></div>
+            </div>
             <div class="sidebar-header">
                 <h3><span class="material-icons-round section-icon">description</span> 3D ULPIN Card</h3>
-                <button class="btn-close" id="closePropertyCard">
+                <button class="btn-close" id="closePropertyCard" aria-label="Close Property Card">
                     <span class="material-icons-round">close</span>
                 </button>
             </div>

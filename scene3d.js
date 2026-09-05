@@ -35,6 +35,7 @@ const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.05;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -300,6 +301,30 @@ renderer.domElement.addEventListener('click', (event) => {
         selectUnitMesh(hit);
     }
 });
+
+// Touch tap selection for mobile devices
+let touchStartX = 0;
+let touchStartY = 0;
+renderer.domElement.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        // Clean tap with minimal drift (< 10px)
+        if (Math.hypot(dx, dy) < 10) {
+            const hit = getIntersectedUnit(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+            if (hit) {
+                selectUnitMesh(hit);
+            }
+        }
+    }
+}, { passive: true });
 
 // Select unit by search event
 window.addEventListener('select-unit', (e) => {

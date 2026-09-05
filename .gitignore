@@ -26,6 +26,9 @@ wheels/
 venv/
 ENV/
 
+# Project Data & Info
+info/
+
 # System / IDE
 .DS_Store
 Thumbs.db
