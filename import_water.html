@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Water Amenities to Supabase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #0B0F19; color: white; }
+        .container { max-width: 600px; margin: 0 auto; background: #161F30; padding: 20px; border-radius: 8px; }
+        input[type="file"] { margin: 20px 0; }
+        button { padding: 10px 20px; background: #2563EB; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #3B82F6; }
+        #log { margin-top: 20px; background: #000; padding: 10px; border-radius: 4px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Import Drinking Water Points</h2>
+        <p>Select the <code>drinking_water.geojson</code> file downloaded from Overpass.</p>
+        <input type="file" id="fileInput" accept=".geojson,application/json">
+        <button id="importBtn">Import to Supabase</button>
+        <div id="log"></div>
+    </div>
+
+    <script type="module">
+        // -- Supabase Setup --
+        const { createClient } = supabase;
+        const supabaseUrl = 'https://tucpybvcrusbmtsdsvik.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1Y3B5YnZjcnVzYm10c2RzdmlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1ODk4MzksImV4cCI6MjEwNDE2NTgzOX0.KmSQcLxnaG4HVR5KMAGoaiHMo9DzktUKpgoigkIhSSs';
+        const client = createClient(supabaseUrl, supabaseKey);
+
+        const logEl = document.getElementById('log');
+        function log(msg) {
+            logEl.innerHTML += `<div>${msg}</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) {
+                log('Please select a file first.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const geojson = JSON.parse(e.target.result);
+                    log(`Loaded JSON with ${geojson.features ? geojson.features.length : 0} features.`);
+                    
+                    if (!geojson.features) {
+                        log('Invalid GeoJSON: Missing features array.');
+                        return;
+                    }
+
+                    let successCount = 0;
+
+                    // Process each feature
+                    for (const feature of geojson.features) {
+                        const amenityType = feature.properties.amenity || 'unknown';
+                        const name = feature.properties.name || null;
+                        
+                        // Insert into amenities table
+                        const { error } = await client.from('amenities').insert({
+                            amenity_type: amenityType,
+                            name: name,
+                            location_geojson: feature.geometry
+                        });
+
+                        if (error) {
+                            log(`Error inserting ${amenityType} (${name}): ${error.message}`);
+                        } else {
+                            successCount++;
+                            if (successCount % 10 === 0) {
+                                log(`Imported ${successCount} amenities...`);
+                            }
+                        }
+                    }
+                    log(`Import complete! Successfully imported ${successCount} amenities.`);
+                } catch (err) {
+                    log(`Error parsing file: ${err.message}`);
+                }
+            };
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>

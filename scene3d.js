@@ -1,0 +1,405 @@
+import { generate3DUlpin, fetchAmenities, fetchParcels } from './app.js';
+
+// Setup Three.js Scene
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0B0F19);
+
+const width = container.clientWidth || window.innerWidth;
+const height = container.clientHeight || window.innerHeight;
+
+// Camera
+const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+camera.position.set(30, 40, 50);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(window.devicePixelRatio);
+container.appendChild(renderer.domElement);
+
+// Post-Processing (Bloom)
+const renderScene = new THREE.RenderPass(scene, camera);
+const bloomPass = new THREE.UnrealBloomPass(
+    new THREE.Vector2(width, height),
+    0.8,  // strength (reduced to avoid over-bloom)
+    0.4,  // radius
+    0.9   // threshold
+);
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(renderScene);
+composer.addPass(bloomPass);
+
+// Controls
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(50, 100, 50);
+scene.add(dirLight);
+
+// Ground Plane
+const gridHelper = new THREE.GridHelper(200, 50, 0x161F30, 0x161F30);
+scene.add(gridHelper);
+
+const groundGeo = new THREE.PlaneGeometry(200, 200);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x0B0F19, depthWrite: false });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// --- Procedural Building Generation ---
+const buildingGroup = new THREE.Group();
+scene.add(buildingGroup);
+
+const floorHeight = 3.0;
+const numFloors = 10;
+const unitsPerFloor = 4;
+const buildingWidth = 20;
+const buildingDepth = 20;
+
+const materialDefault = new THREE.MeshStandardMaterial({
+    color: 0x2563EB,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide
+});
+const materialSelected = new THREE.MeshStandardMaterial({
+    color: 0x10B981,
+    emissive: 0x10B981,
+    emissiveIntensity: 1.5,
+    transparent: true,
+    opacity: 0.9
+});
+const materialHover = new THREE.MeshStandardMaterial({
+    color: 0x2563EB,
+    transparent: true,
+    opacity: 0.7
+});
+
+const units = [];
+const parcelUlpin2d = "14MH2704291845";
+
+for (let i = 0; i < numFloors; i++) {
+    const floorGroup = new THREE.Group();
+    floorGroup.position.y = i * floorHeight;
+    floorGroup.userData = { originalY: i * floorHeight, floorIndex: i };
+
+    for (let u = 0; u < unitsPerFloor; u++) {
+        const unitGeo = new THREE.BoxGeometry(buildingWidth / 2 - 0.5, floorHeight - 0.2, buildingDepth / 2 - 0.5);
+        const unitMesh = new THREE.Mesh(unitGeo, materialDefault.clone());
+
+        const xPos = (u % 2 === 0) ? -buildingWidth / 4 : buildingWidth / 4;
+        const zPos = (u < 2) ? -buildingDepth / 4 : buildingDepth / 4;
+        unitMesh.position.set(xPos, floorHeight / 2, zPos);
+
+        const floorNumber = i + 1;
+        const unitNumber = `${i + 1}0${u + 1}`;
+        const zTop = (i + 1) * floorHeight;
+        const zBottom = i * floorHeight;
+
+        unitMesh.userData = {
+            isUnit: true,
+            floorNumber,
+            unitNumber,
+            zTop,
+            zBottom,
+            owner: `Resident ${unitNumber}`,
+            carpetArea: 750 + Math.floor(Math.random() * 100),
+            parking: `P-${floorNumber}-${u}`,
+            hasLien: Math.random() > 0.8,
+            originalMaterial: materialDefault.clone(),
+            ulpin3d: generate3DUlpin({
+                parcelUlpin2d,
+                floorNumber,
+                unitNumber,
+                elevationBottomZ: zBottom,
+                elevationTopZ: zTop
+            })
+        };
+
+        units.push(unitMesh);
+        floorGroup.add(unitMesh);
+
+        // Edges (Cyan Wireframe for hover)
+        const edges = new THREE.EdgesGeometry(unitGeo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 }));
+        line.visible = false;
+        unitMesh.userData.edges = line;
+        unitMesh.add(line);
+    }
+    buildingGroup.add(floorGroup);
+}
+
+// --- Real-world Data Integration ---
+const centerLng = 73.7898;
+const centerLat = 19.9975;
+const coordScale = 100000;
+
+// Groups to toggle visibility
+let parcelGroup = null;
+let amenityGroup = null;
+
+window.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // --- Load Parcels ---
+        const parcels = await fetchParcels();
+        parcelGroup = new THREE.Group();
+        parcelGroup.name = 'parcels';
+        scene.add(parcelGroup);
+
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x3B82F6, opacity: 0.8, transparent: true, linewidth: 2 });
+
+        parcels.forEach(parcel => {
+            const geom = parcel.boundary_geojson;
+            if (!geom) return;
+
+            if (geom.type === 'Polygon') {
+                geom.coordinates.forEach(ring => {
+                    const points = [];
+                    ring.forEach(coord => {
+                        const x = (coord[0] - centerLng) * coordScale;
+                        const z = -(coord[1] - centerLat) * coordScale;
+                        points.push(new THREE.Vector3(x, 0.05, z));
+                    });
+                    const isNearby = points.some(pt => Math.abs(pt.x) < 300 && Math.abs(pt.z) < 300);
+                    if (isNearby) {
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.LineLoop(geometry, lineMat);
+                        parcelGroup.add(line);
+                    }
+                });
+            } else if (geom.type === 'Point') {
+                const x = (geom.coordinates[0] - centerLng) * coordScale;
+                const z = -(geom.coordinates[1] - centerLat) * coordScale;
+                if (Math.abs(x) < 300 && Math.abs(z) < 300) {
+                    const dotGeo = new THREE.CircleGeometry(0.8, 12);
+                    const dotMat = new THREE.MeshBasicMaterial({ color: 0x3B82F6, opacity: 0.7, transparent: true });
+                    const dot = new THREE.Mesh(dotGeo, dotMat);
+                    dot.rotation.x = -Math.PI / 2;
+                    dot.position.set(x, 0.05, z);
+                    parcelGroup.add(dot);
+                }
+            }
+        });
+
+        window.dispatchEvent(new CustomEvent('stats-update', { detail: { parcels: parcels.length } }));
+
+        // --- Load Amenities ---
+        const amenities = await fetchAmenities();
+        amenityGroup = new THREE.Group();
+        amenityGroup.name = 'amenities';
+        scene.add(amenityGroup);
+
+        const waterMaterial = new THREE.MeshStandardMaterial({
+            color: 0x38BDF8,
+            emissive: 0x0284C7,
+            emissiveIntensity: 0.5,
+            roughness: 0.2,
+            metalness: 0.8
+        });
+        const sphereGeo = new THREE.SphereGeometry(1.2, 16, 16);
+
+        amenities.forEach(amenity => {
+            if (amenity.location_geojson && amenity.location_geojson.type === 'Point') {
+                const [lng, lat] = amenity.location_geojson.coordinates;
+                const x = (lng - centerLng) * coordScale;
+                const z = -(lat - centerLat) * coordScale;
+
+                if (Math.abs(x) < 250 && Math.abs(z) < 250) {
+                    const marker = new THREE.Mesh(sphereGeo, waterMaterial);
+                    marker.position.set(x, 1.2, z);
+
+                    marker.userData = {
+                        isAmenity: true,
+                        owner: amenity.name || 'Public Civic Facility',
+                        carpetArea: 0,
+                        parking: 'N/A',
+                        hasLien: false,
+                        ulpin3d: `AMENITY-${(amenity.amenity_type || 'CIVIC').toUpperCase()}`,
+                        originalMaterial: waterMaterial.clone()
+                    };
+
+                    amenityGroup.add(marker);
+                    units.push(marker);
+                }
+            }
+        });
+
+        window.dispatchEvent(new CustomEvent('stats-update', { detail: { amenities: amenities.length } }));
+
+    } catch (err) {
+        console.error('Error loading data:', err);
+    }
+
+    // Signal scene is ready (after all data loaded)
+    window.dispatchEvent(new CustomEvent('scene-ready'));
+});
+
+// --- Interaction / Raycasting ---
+const raycaster = new THREE.Raycaster();
+let hoveredUnit = null;
+let selectedUnit = null;
+
+function getIntersectedUnit(clientX, clientY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+    const intersects = raycaster.intersectObjects(units);
+    return intersects.length > 0 ? intersects[0].object : null;
+}
+
+export function selectUnitMesh(unitMesh) {
+    if (!unitMesh) return;
+    if (selectedUnit) {
+        selectedUnit.material.copy(selectedUnit.userData.originalMaterial);
+        if (selectedUnit.userData.edges) selectedUnit.userData.edges.visible = false;
+    }
+    selectedUnit = unitMesh;
+    selectedUnit.material.copy(materialSelected);
+    if (selectedUnit.userData.edges) selectedUnit.userData.edges.visible = true;
+
+    window.dispatchEvent(new CustomEvent('unit-selected', { detail: selectedUnit.userData }));
+}
+
+container.addEventListener('mousemove', (event) => {
+    const hit = getIntersectedUnit(event.clientX, event.clientY);
+    if (hit) {
+        if (hoveredUnit !== hit) {
+            if (hoveredUnit && hoveredUnit !== selectedUnit) {
+                hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+                if (hoveredUnit.userData.edges) hoveredUnit.userData.edges.visible = false;
+            }
+            hoveredUnit = hit;
+            if (hoveredUnit !== selectedUnit) {
+                hoveredUnit.material.copy(materialHover);
+                if (hoveredUnit.userData.edges) hoveredUnit.userData.edges.visible = true;
+            }
+            container.style.cursor = 'pointer';
+        }
+    } else {
+        if (hoveredUnit && hoveredUnit !== selectedUnit) {
+            hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+            if (hoveredUnit.userData.edges) hoveredUnit.userData.edges.visible = false;
+        }
+        hoveredUnit = null;
+        container.style.cursor = 'grab';
+    }
+});
+
+renderer.domElement.addEventListener('click', (event) => {
+    const hit = getIntersectedUnit(event.clientX, event.clientY);
+    if (hit) {
+        selectUnitMesh(hit);
+    }
+});
+
+// Select unit by search event
+window.addEventListener('select-unit', (e) => {
+    const targetUlpin = e.detail.ulpin3d;
+    const targetNum = e.detail.unitNumber;
+    const match = units.find(u => 
+        (targetUlpin && u.userData.ulpin3d === targetUlpin) ||
+        (targetNum && u.userData.unitNumber === targetNum)
+    );
+    if (match) {
+        selectUnitMesh(match);
+    }
+});
+
+// --- UI Filter Listeners ---
+window.addEventListener('toggle-basements', (e) => {
+    buildingGroup.children.forEach(floor => {
+        if (floor.userData.originalY === 0) {
+            floor.visible = e.detail;
+        }
+    });
+});
+
+window.addEventListener('toggle-buildings', (e) => {
+    buildingGroup.visible = e.detail;
+});
+
+window.addEventListener('toggle-parcels', (e) => {
+    if (parcelGroup) parcelGroup.visible = e.detail;
+});
+
+window.addEventListener('toggle-amenities', (e) => {
+    if (amenityGroup) amenityGroup.visible = e.detail;
+});
+
+window.addEventListener('filter-floors', (e) => {
+    const maxFloor = e.detail;
+    buildingGroup.children.forEach((floor, index) => {
+        floor.visible = index <= maxFloor;
+    });
+});
+
+// --- Window Resize ---
+window.addEventListener('resize', () => {
+    const newWidth = container.clientWidth || window.innerWidth;
+    const newHeight = container.clientHeight || window.innerHeight;
+    camera.aspect = newWidth / newHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(newWidth, newHeight);
+    composer.setSize(newWidth, newHeight);
+});
+
+// --- Exploded View Animation ---
+let isExploded = false;
+document.getElementById('explodeBtn').addEventListener('click', () => {
+    isExploded = !isExploded;
+    const targetSpacing = isExploded ? 2.5 : 0;
+
+    buildingGroup.children.forEach((floor, index) => {
+        const targetY = floor.userData.originalY + (index * targetSpacing);
+        floor.userData.targetY = targetY;
+    });
+});
+
+// --- Reset Camera ---
+document.getElementById('btnReset').addEventListener('click', () => {
+    camera.position.set(30, 40, 50);
+    controls.target.set(0, 15, 0);
+    controls.update();
+});
+
+// --- Animation Loop ---
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+
+    // Exploded view interpolation
+    buildingGroup.children.forEach(floor => {
+        if (floor.userData.targetY !== undefined) {
+            floor.position.y += (floor.userData.targetY - floor.position.y) * 0.1;
+        }
+    });
+
+    composer.render();
+}
+
+animate();
+
+// Helper to shake geometry on conflict
+export function shakeGeometry() {
+    if (selectedUnit) {
+        const originalX = selectedUnit.position.x;
+        let count = 0;
+        const interval = setInterval(() => {
+            selectedUnit.position.x = originalX + (Math.random() - 0.5) * 1.5;
+            count++;
+            if (count > 10) {
+                clearInterval(interval);
+                selectedUnit.position.x = originalX;
+            }
+        }, 30);
+    }
+}

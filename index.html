@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bhu-Aadhaar 3D — 3D Volumetric Land Administration</title>
+    <meta name="description" content="3D ULPIN Property Viewer for India's Unique Land Parcel Identification Number system. Visualize buildings, units, and encumbrances in 3D.">
+    <link rel="stylesheet" href="style.css">
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Post-Processing CDNs for Bloom -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="navbar glass">
+        <div class="nav-left">
+            <div class="logo">
+                <span class="logo-icon material-icons-round">public</span>
+                <span class="logo-text">Bhu-Aadhaar <span class="logo-3d">3D</span></span>
+            </div>
+        </div>
+        <div class="nav-center">
+            <div class="search-container">
+                <span class="search-icon material-icons-round">search</span>
+                <input type="text" id="searchInput" placeholder="Search by 2D ULPIN / City / Plot" autocomplete="off">
+                <button id="searchBtn">Search</button>
+                <div id="searchResults" class="search-results glass" style="display: none;"></div>
+            </div>
+        </div>
+        <div class="nav-right">
+            <div class="role-toggle">
+                <span class="material-icons-round role-icon">person</span>
+                <select id="roleSelect">
+                    <option value="citizen">Citizen / Homebuyer</option>
+                    <option value="officer">Revenue Officer</option>
+                    <option value="bank">Bank / Financial Inst.</option>
+                </select>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        
+        <!-- Left Sidebar: Layer Filters -->
+        <aside class="sidebar left-sidebar glass">
+            <div class="sidebar-section">
+                <h3><span class="material-icons-round section-icon">layers</span> Layer Filters</h3>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <input type="checkbox" id="layerBuildings" checked>
+                        <span class="custom-checkbox"></span>
+                        <span class="material-icons-round filter-ico">apartment</span>
+                        Buildings
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <input type="checkbox" id="layerBasements" checked>
+                        <span class="custom-checkbox"></span>
+                        <span class="material-icons-round filter-ico">foundation</span>
+                        Basements
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <input type="checkbox" id="layerAirRights">
+                        <span class="custom-checkbox"></span>
+                        <span class="material-icons-round filter-ico">flight</span>
+                        Air Rights
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <input type="checkbox" id="layerParcels" checked>
+                        <span class="custom-checkbox"></span>
+                        <span class="material-icons-round filter-ico">grid_on</span>
+                        Parcels
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <input type="checkbox" id="layerAmenities" checked>
+                        <span class="custom-checkbox"></span>
+                        <span class="material-icons-round filter-ico">water_drop</span>
+                        Amenities
+                    </label>
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <div class="sidebar-section">
+                <h3><span class="material-icons-round section-icon">view_in_ar</span> 3D Controls</h3>
+                <div class="action-group">
+                    <button id="explodeBtn" class="btn btn-icon">
+                        <span class="material-icons-round">unfold_more</span>
+                        Exploded View
+                    </button>
+                </div>
+                <div class="slider-group">
+                    <label for="floorSlider">
+                        <span class="material-icons-round section-icon">stacked_bar_chart</span>
+                        Floor Viewer
+                    </label>
+                    <div class="slider-track">
+                        <input type="range" id="floorSlider" min="0" max="9" value="9">
+                        <span class="slider-value" id="floorValue">All</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <div class="sidebar-section stats-section">
+                <h3><span class="material-icons-round section-icon">analytics</span> Data Stats</h3>
+                <div class="stat-row">
+                    <span class="stat-label">Parcels Loaded</span>
+                    <span class="stat-value" id="statParcels">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Amenities</span>
+                    <span class="stat-value" id="statAmenities">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Floors</span>
+                    <span class="stat-value">10</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Units</span>
+                    <span class="stat-value">40</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center: Interactive 3D WebGL Canvas -->
+        <main class="canvas-container" id="canvas-container">
+            <!-- Three.js will render here -->
+            <!-- Loading Overlay -->
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loader-content">
+                    <div class="spinner"></div>
+                    <span>Loading 3D Scene...</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: Property Inspector Card -->
+        <aside class="sidebar right-sidebar glass" id="property-card" style="display: none;">
+            <div class="sidebar-header">
+                <h3><span class="material-icons-round section-icon">description</span> 3D ULPIN Card</h3>
+                <button class="btn-close" id="closePropertyCard">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            
+            <div class="property-detail">
+                <span class="label">Legal 3D-ULPIN</span>
+                <span class="value ulpin-code" id="prop-ulpin">-</span>
+            </div>
+            
+            <div class="property-detail">
+                <span class="label">Owner</span>
+                <span class="value" id="prop-owner">-</span>
+            </div>
+            
+            <div class="property-detail">
+                <span class="label">Carpet Area</span>
+                <span class="value" id="prop-area">-</span>
+            </div>
+            
+            <div class="property-detail">
+                <span class="label">Parking Slot</span>
+                <span class="value clickable" id="prop-parking" title="Click to verify assignment">-</span>
+            </div>
+
+            <div class="property-detail">
+                <span class="label">Encumbrance (Lien)</span>
+                <span class="value status-badge" id="prop-lien">-</span>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <div class="action-group">
+                <button id="downloadPdfBtn" class="btn btn-primary btn-icon">
+                    <span class="material-icons-round">picture_as_pdf</span>
+                    Download 3D Property Card
+                </button>
+            </div>
+
+            <div id="conflictAlert" class="alert error" style="display: none;">
+                <span class="material-icons-round alert-icon">warning</span>
+                <div>
+                    <strong>Conflict Detected</strong>
+                    <p id="conflictMessage"></p>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Floating Camera Bar / Status Bar -->
+    <div class="status-bar glass">
+        <div class="camera-controls">
+            <button id="btnOrbit" class="cam-btn active" title="Orbit">
+                <span class="material-icons-round">3d_rotation</span>
+            </button>
+            <button id="btnPan" class="cam-btn" title="Pan">
+                <span class="material-icons-round">pan_tool</span>
+            </button>
+            <button id="btnReset" class="cam-btn" title="Reset Camera">
+                <span class="material-icons-round">restart_alt</span>
+            </button>
+        </div>
+        <div class="coordinates">
+            <span class="material-icons-round coord-icon">place</span>
+            19.9975° N, 73.7898° E
+            <span class="coord-divider">|</span>
+            <span class="material-icons-round coord-icon">tag</span>
+            Active: <span id="activeParcelId" class="active-id">14MH2704291845</span>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="app.js"></script>
+    <script type="module" src="scene3d.js"></script>
+</body>
+</html>
