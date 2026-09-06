@@ -115,6 +115,7 @@ const propOwner = document.getElementById('prop-owner');
 const propArea = document.getElementById('prop-area');
 const propParking = document.getElementById('prop-parking');
 const propLien = document.getElementById('prop-lien');
+const propZaxis = document.getElementById('prop-zaxis');
 const conflictAlert = document.getElementById('conflictAlert');
 const conflictMessage = document.getElementById('conflictMessage');
 
@@ -133,6 +134,13 @@ window.addEventListener('unit-selected', async (e) => {
     propOwner.textContent = data.owner || '-';
     propArea.textContent = `${data.carpetArea || 750} sq ft`;
     propParking.textContent = data.parking || '-';
+    if (propZaxis) {
+        if (data.zBottom !== undefined && data.zTop !== undefined) {
+            propZaxis.innerHTML = `${data.zBottom.toFixed(1)}m &rarr; ${data.zTop.toFixed(1)}m`;
+        } else {
+            propZaxis.textContent = 'N/A';
+        }
+    }
     conflictAlert.style.display = 'none';
 
     // If unit has 3D ULPIN, query Firebase for live verified records
@@ -448,82 +456,6 @@ searchInput.addEventListener('keypress', (e) => {
     }
 });
 
-// --- Left Sidebar UI Controls ---
-// Floor Slider
-const floorSlider = document.getElementById('floorSlider');
-const floorValue = document.getElementById('floorValue');
-if (floorSlider) {
-    floorSlider.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value);
-        floorValue.textContent = val === 9 ? 'All' : `Floor ${val + 1}`;
-        window.dispatchEvent(new CustomEvent('filter-floors', { detail: val }));
-    });
-}
-
-// Layer Toggles
-const toggles = [
-    { id: 'layerBuildings', event: 'toggle-buildings' },
-    { id: 'layerBasements', event: 'toggle-basements' },
-    { id: 'layerParcels', event: 'toggle-parcels' },
-    { id: 'layerAmenities', event: 'toggle-amenities' }
-];
-
-toggles.forEach(t => {
-    const el = document.getElementById(t.id);
-    if (el) {
-        el.addEventListener('change', (e) => {
-            window.dispatchEvent(new CustomEvent(t.event, { detail: e.target.checked }));
-        });
-    }
-});
-// --- Property Inspector Panel ---
-const propertyCard = document.getElementById('property-card');
-const propUlpin = document.getElementById('prop-ulpin');
-const propOwner = document.getElementById('prop-owner');
-const propArea = document.getElementById('prop-area');
-const propZaxis = document.getElementById('prop-zaxis');
-const propParking = document.getElementById('prop-parking');
-const propLien = document.getElementById('prop-lien');
-const closePropertyCard = document.getElementById('closePropertyCard');
-
-window.addEventListener('unit-selected', (e) => {
-    const data = e.detail;
-    if (!data) return;
-    
-    propertyCard.style.display = 'block';
-    propUlpin.textContent = data.ulpin3d || 'N/A';
-    propOwner.textContent = data.owner || 'Unknown';
-    propArea.textContent = data.carpetArea ? `${data.carpetArea} sq.m` : 'N/A';
-    
-    if (propZaxis) {
-        if (data.zBottom !== undefined && data.zTop !== undefined) {
-            propZaxis.innerHTML = `${data.zBottom.toFixed(1)}m &rarr; ${data.zTop.toFixed(1)}m`;
-        } else {
-            propZaxis.textContent = 'N/A';
-        }
-    }
-    
-    if (data.parking && data.parking !== 'N/A') {
-        propParking.innerHTML = `<span style="color: #10B981;">Yes (${data.parking})</span>`;
-    } else {
-        propParking.innerHTML = `<span style="color: #6B7280;">None</span>`;
-    }
-
-    if (data.hasLien) {
-        propLien.textContent = 'Active Lien (Bank)';
-        propLien.className = 'value status-badge badge-error';
-    } else {
-        propLien.textContent = 'Clear Title';
-        propLien.className = 'value status-badge badge-success';
-    }
-});
-
-if (closePropertyCard) {
-    closePropertyCard.addEventListener('click', () => {
-        propertyCard.style.display = 'none';
-    });
-}
-
 // --- Role Switcher ---
 const roleSelect = document.getElementById('roleSelect');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
@@ -547,7 +479,6 @@ if (roleSelect) {
     });
 }
 
-// Download/Action Button
 if (downloadPdfBtn) {
     downloadPdfBtn.addEventListener('click', () => {
         const ulpin = propUlpin.textContent;
