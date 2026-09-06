@@ -77,7 +77,7 @@
                                 district: 'Pune',
                                 taluka: 'Pune City',
                                 village: 'Shivajinagar',
-                                boundary_geojson: feature.geometry
+                                boundary_geojson: JSON.stringify(feature.geometry)
                             });
 
                             // 2. Insert into buildings table
@@ -87,7 +87,7 @@
                                 total_floors: feature.properties['building:levels'] ? parseInt(feature.properties['building:levels']) : Math.floor(Math.random() * 10) + 2,
                                 basement_floors: 1,
                                 height_meters: feature.properties.height ? parseFloat(feature.properties.height) : (Math.floor(Math.random() * 10) + 2) * 3,
-                                footprint_geojson: feature.geometry
+                                footprint_geojson: JSON.stringify(feature.geometry)
                             });
 
                             log(`Successfully imported building for parcel: ${mockUlpin2d}`);

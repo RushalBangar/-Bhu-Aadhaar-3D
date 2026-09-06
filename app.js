@@ -20,11 +20,34 @@ export async function fetchAmenities() {
         const querySnapshot = await getDocs(collection(db, 'amenities'));
         const data = [];
         querySnapshot.forEach((doc) => {
-            data.push({ id: doc.id, ...doc.data() });
+            const docData = doc.data();
+            if (typeof docData.location_geojson === 'string') {
+                try { docData.location_geojson = JSON.parse(docData.location_geojson); } catch(e) {}
+            }
+            data.push({ id: doc.id, ...docData });
         });
         return data;
     } catch (error) {
         console.error('Error fetching amenities:', error);
+        return [];
+    }
+}
+
+export async function fetchBuildings() {
+    try {
+        const q = query(collection(db, 'buildings'), limit(50));
+        const querySnapshot = await getDocs(q);
+        const data = [];
+        querySnapshot.forEach((doc) => {
+            const docData = doc.data();
+            if (typeof docData.footprint_geojson === 'string') {
+                try { docData.footprint_geojson = JSON.parse(docData.footprint_geojson); } catch(e) {}
+            }
+            data.push({ id: doc.id, ...docData });
+        });
+        return data;
+    } catch (error) {
+        console.error('Error fetching buildings:', error);
         return [];
     }
 }
@@ -38,13 +61,25 @@ export async function fetchParcels() {
         );
         const snapshot1 = await getDocs(q1);
         const primaryParcels = [];
-        snapshot1.forEach(doc => primaryParcels.push(doc.data()));
+        snapshot1.forEach(doc => {
+            const data = doc.data();
+            if (typeof data.boundary_geojson === 'string') {
+                try { data.boundary_geojson = JSON.parse(data.boundary_geojson); } catch(e) {}
+            }
+            primaryParcels.push(data);
+        });
 
         // 2. Fetch additional parcels from database
         const q2 = query(collection(db, 'parcels'), limit(500));
         const snapshot2 = await getDocs(q2);
         const extraParcels = [];
-        snapshot2.forEach(doc => extraParcels.push(doc.data()));
+        snapshot2.forEach(doc => {
+            const data = doc.data();
+            if (typeof data.boundary_geojson === 'string') {
+                try { data.boundary_geojson = JSON.parse(data.boundary_geojson); } catch(e) {}
+            }
+            extraParcels.push(data);
+        });
 
         const map = new Map();
         primaryParcels.forEach(p => map.set(p.ulpin_2d, p));

@@ -1,0 +1,24 @@
+{
+  "name": "bhu-aadhaar-3d",
+  "version": "1.0.0",
+  "description": "**Problem Statement ID: SIH26011**   **Department of Land Resources (DoLR), Ministry of Rural Development, Government of India**",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RushalBangar/-Bhu-Aadhaar-3D.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RushalBangar/-Bhu-Aadhaar-3D/issues"
+  },
+  "homepage": "https://github.com/RushalBangar/-Bhu-Aadhaar-3D#readme",
+  "dependencies": {
+    "firebase": "^12.18.0"
+  }
+}

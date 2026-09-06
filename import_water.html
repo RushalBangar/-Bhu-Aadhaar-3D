@@ -75,7 +75,7 @@
                             await addDoc(collection(db, 'amenities'), {
                                 amenity_type: amenityType,
                                 name: name,
-                                location_geojson: feature.geometry
+                                location_geojson: JSON.stringify(feature.geometry)
                             });
                             successCount++;
                             if (successCount % 10 === 0) {

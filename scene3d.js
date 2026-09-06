@@ -1,4 +1,4 @@
-import { generate3DUlpin, fetchAmenities, fetchParcels } from './app.js';
+import { generate3DUlpin, fetchAmenities, fetchParcels, fetchBuildings } from './app.js';
 
 // Setup Three.js Scene
 const container = document.getElementById('canvas-container');
@@ -59,11 +59,7 @@ scene.add(ground);
 const buildingGroup = new THREE.Group();
 scene.add(buildingGroup);
 
-const floorHeight = 3.0;
-const numFloors = 10;
-const unitsPerFloor = 4;
-const buildingWidth = 20;
-const buildingDepth = 20;
+const units = [];
 
 const materialDefault = new THREE.MeshStandardMaterial({
     color: 0x2563EB,
@@ -84,59 +80,9 @@ const materialHover = new THREE.MeshStandardMaterial({
     opacity: 0.7
 });
 
-const units = [];
-const parcelUlpin2d = "14MH2704291845";
-
-for (let i = 0; i < numFloors; i++) {
-    const floorGroup = new THREE.Group();
-    floorGroup.position.y = i * floorHeight;
-    floorGroup.userData = { originalY: i * floorHeight, floorIndex: i };
-
-    for (let u = 0; u < unitsPerFloor; u++) {
-        const unitGeo = new THREE.BoxGeometry(buildingWidth / 2 - 0.5, floorHeight - 0.2, buildingDepth / 2 - 0.5);
-        const unitMesh = new THREE.Mesh(unitGeo, materialDefault.clone());
-
-        const xPos = (u % 2 === 0) ? -buildingWidth / 4 : buildingWidth / 4;
-        const zPos = (u < 2) ? -buildingDepth / 4 : buildingDepth / 4;
-        unitMesh.position.set(xPos, floorHeight / 2, zPos);
-
-        const floorNumber = i + 1;
-        const unitNumber = `${i + 1}0${u + 1}`;
-        const zTop = (i + 1) * floorHeight;
-        const zBottom = i * floorHeight;
-
-        unitMesh.userData = {
-            isUnit: true,
-            floorNumber,
-            unitNumber,
-            zTop,
-            zBottom,
-            owner: `Resident ${unitNumber}`,
-            carpetArea: 750 + Math.floor(Math.random() * 100),
-            parking: `P-${floorNumber}-${u}`,
-            hasLien: Math.random() > 0.8,
-            originalMaterial: materialDefault.clone(),
-            ulpin3d: generate3DUlpin({
-                parcelUlpin2d,
-                floorNumber,
-                unitNumber,
-                elevationBottomZ: zBottom,
-                elevationTopZ: zTop
-            })
-        };
-
-        units.push(unitMesh);
-        floorGroup.add(unitMesh);
-
-        // Edges (Cyan Wireframe for hover)
-        const edges = new THREE.EdgesGeometry(unitGeo);
-        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 }));
-        line.visible = false;
-        unitMesh.userData.edges = line;
-        unitMesh.add(line);
-    }
-    buildingGroup.add(floorGroup);
-}
+const buildingGroup = new THREE.Group();
+buildingGroup.name = 'buildings';
+scene.add(buildingGroup);
 
 // --- Real-world Data Integration ---
 const centerLng = 73.7898;
@@ -191,6 +137,82 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
 
         window.dispatchEvent(new CustomEvent('stats-update', { detail: { parcels: parcels.length } }));
+
+        // --- Load Buildings ---
+        const buildings = await fetchBuildings();
+        buildings.forEach(building => {
+            const geom = building.footprint_geojson;
+            if (!geom || geom.type !== 'Polygon') return;
+
+            const ring = geom.coordinates[0];
+            if (!ring || ring.length < 3) return;
+
+            const shape = new THREE.Shape();
+            let isNearby = false;
+
+            ring.forEach((coord, index) => {
+                const x = (coord[0] - centerLng) * coordScale;
+                const y = (coord[1] - centerLat) * coordScale;
+                if (Math.abs(x) < 1000 && Math.abs(y) < 1000) isNearby = true;
+                if (index === 0) shape.moveTo(x, y);
+                else shape.lineTo(x, y);
+            });
+
+            if (!isNearby) return;
+
+            const numFloors = building.total_floors || (Math.floor(Math.random() * 5) + 2);
+            const totalHeight = building.height_meters || (numFloors * 3);
+            const floorHeight = totalHeight / numFloors;
+
+            const extrudeSettings = { depth: floorHeight - 0.2, bevelEnabled: false };
+            const floorGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            
+            const bGroup = new THREE.Group();
+
+            for (let i = 0; i < numFloors; i++) {
+                const unitMesh = new THREE.Mesh(floorGeo, materialDefault.clone());
+                unitMesh.rotation.x = -Math.PI / 2;
+                unitMesh.position.y = i * floorHeight;
+
+                const floorNumber = i + 1;
+                const unitNumber = `${i + 1}01`;
+                const zTop = (i + 1) * floorHeight;
+                const zBottom = i * floorHeight;
+
+                unitMesh.userData = {
+                    isUnit: true,
+                    floorNumber,
+                    unitNumber,
+                    zTop,
+                    zBottom,
+                    owner: `Resident ${unitNumber}`,
+                    carpetArea: 800,
+                    parking: `P-${floorNumber}`,
+                    hasLien: Math.random() > 0.8,
+                    originalMaterial: materialDefault.clone(),
+                    ulpin3d: generate3DUlpin({
+                        parcelUlpin2d: building.parcel_id || 'UNKNOWN',
+                        floorNumber,
+                        unitNumber,
+                        elevationBottomZ: zBottom,
+                        elevationTopZ: zTop
+                    }),
+                    originalY: i * floorHeight,
+                    floorIndex: i,
+                    targetY: i * floorHeight // for explode view
+                };
+
+                const edges = new THREE.EdgesGeometry(floorGeo);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 }));
+                line.visible = false;
+                unitMesh.userData.edges = line;
+                unitMesh.add(line);
+
+                units.push(unitMesh);
+                bGroup.add(unitMesh);
+            }
+            buildingGroup.add(bGroup);
+        });
 
         // --- Load Amenities ---
         const amenities = await fetchAmenities();
@@ -341,10 +363,12 @@ window.addEventListener('select-unit', (e) => {
 
 // --- UI Filter Listeners ---
 window.addEventListener('toggle-basements', (e) => {
-    buildingGroup.children.forEach(floor => {
-        if (floor.userData.originalY === 0) {
-            floor.visible = e.detail;
-        }
+    buildingGroup.children.forEach(bGroup => {
+        bGroup.children.forEach(floor => {
+            if (floor.userData.originalY === 0) {
+                floor.visible = e.detail;
+            }
+        });
     });
 });
 
@@ -362,8 +386,10 @@ window.addEventListener('toggle-amenities', (e) => {
 
 window.addEventListener('filter-floors', (e) => {
     const maxFloor = e.detail;
-    buildingGroup.children.forEach((floor, index) => {
-        floor.visible = index <= maxFloor;
+    buildingGroup.children.forEach(bGroup => {
+        bGroup.children.forEach(floor => {
+            floor.visible = floor.userData.floorIndex <= maxFloor;
+        });
     });
 });
 
@@ -383,9 +409,11 @@ document.getElementById('explodeBtn').addEventListener('click', () => {
     isExploded = !isExploded;
     const targetSpacing = isExploded ? 2.5 : 0;
 
-    buildingGroup.children.forEach((floor, index) => {
-        const targetY = floor.userData.originalY + (index * targetSpacing);
-        floor.userData.targetY = targetY;
+    buildingGroup.children.forEach(bGroup => {
+        bGroup.children.forEach((floor, index) => {
+            const targetY = floor.userData.originalY + (index * targetSpacing);
+            floor.userData.targetY = targetY;
+        });
     });
 });
 
@@ -402,10 +430,12 @@ function animate() {
     controls.update();
 
     // Exploded view interpolation
-    buildingGroup.children.forEach(floor => {
-        if (floor.userData.targetY !== undefined) {
-            floor.position.y += (floor.userData.targetY - floor.position.y) * 0.1;
-        }
+    buildingGroup.children.forEach(bGroup => {
+        bGroup.children.forEach(floor => {
+            if (floor.userData.targetY !== undefined) {
+                floor.position.y += (floor.userData.targetY - floor.position.y) * 0.1;
+            }
+        });
     });
 
     composer.render();
