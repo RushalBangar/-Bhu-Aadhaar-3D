@@ -349,8 +349,8 @@ const searchResults = document.getElementById('searchResults');
 let searchDebounce = null;
 
 searchInput.addEventListener('input', (e) => {
-    const query = e.target.value.trim();
-    if (query.length < 3) {
+    const searchTerm = e.target.value.trim();
+    if (searchTerm.length < 3) {
         searchResults.style.display = 'none';
         return;
     }
@@ -361,7 +361,7 @@ searchInput.addEventListener('input', (e) => {
         try {
             // Firebase doesn't have an exact equivalent to ilike. We'll use prefix match 
             // for ulpin_2d and ulpin_3d, and fetch some results to filter on the client.
-            const queryUpper = query.toUpperCase();
+            const queryUpper = searchTerm.toUpperCase();
             
             const qParcels = query(collection(db, 'parcels'), 
                 or(
@@ -469,15 +469,15 @@ document.addEventListener('click', (e) => {
 });
 // Execute direct search for typed ULPIN
 function executeSearch() {
-    const query = searchInput.value.trim().toUpperCase();
-    if (!query) return;
+    const searchTerm = searchInput.value.trim().toUpperCase();
+    if (!searchTerm) return;
     
     // Hide autocomplete results
     searchResults.style.display = 'none';
 
     // Dispatch select-unit which scene3d.js listens to
     window.dispatchEvent(new CustomEvent('select-unit', { 
-        detail: { ulpin3d: query, unitNumber: query } 
+        detail: { ulpin3d: searchTerm, unitNumber: searchTerm } 
     }));
 }
 
