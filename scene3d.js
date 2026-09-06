@@ -421,9 +421,15 @@ window.addEventListener('resize', () => {
 
 // --- Exploded View Animation ---
 let isExploded = false;
-document.getElementById('explodeBtn').addEventListener('click', () => {
+const explodeBtn = document.getElementById('explodeBtn');
+const mobileExplodeBtn = document.getElementById('mobileExplodeBtn');
+
+function toggleExplodedView() {
     isExploded = !isExploded;
     const targetSpacing = isExploded ? 2.5 : 0;
+    
+    if (explodeBtn) explodeBtn.classList.toggle('active', isExploded);
+    if (mobileExplodeBtn) mobileExplodeBtn.classList.toggle('active', isExploded);
 
     buildingGroup.children.forEach(bGroup => {
         bGroup.children.forEach((floor, index) => {
@@ -431,7 +437,10 @@ document.getElementById('explodeBtn').addEventListener('click', () => {
             floor.userData.targetY = targetY;
         });
     });
-});
+}
+
+if (explodeBtn) explodeBtn.addEventListener('click', toggleExplodedView);
+if (mobileExplodeBtn) mobileExplodeBtn.addEventListener('click', toggleExplodedView);
 
 // --- Camera Controls ---
 const btnOrbit = document.getElementById('btnOrbit');

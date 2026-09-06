@@ -439,6 +439,35 @@ searchInput.addEventListener('keypress', (e) => {
         executeSearch();
     }
 });
+
+// --- Left Sidebar UI Controls ---
+// Floor Slider
+const floorSlider = document.getElementById('floorSlider');
+const floorValue = document.getElementById('floorValue');
+if (floorSlider) {
+    floorSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        floorValue.textContent = val === 9 ? 'All' : `Floor ${val + 1}`;
+        window.dispatchEvent(new CustomEvent('filter-floors', { detail: val }));
+    });
+}
+
+// Layer Toggles
+const toggles = [
+    { id: 'layerBuildings', event: 'toggle-buildings' },
+    { id: 'layerBasements', event: 'toggle-basements' },
+    { id: 'layerParcels', event: 'toggle-parcels' },
+    { id: 'layerAmenities', event: 'toggle-amenities' }
+];
+
+toggles.forEach(t => {
+    const el = document.getElementById(t.id);
+    if (el) {
+        el.addEventListener('change', (e) => {
+            window.dispatchEvent(new CustomEvent(t.event, { detail: e.target.checked }));
+        });
+    }
+});
 // Download PDF
 document.getElementById('downloadPdfBtn').addEventListener('click', () => {
     const ulpin = propUlpin.textContent;
