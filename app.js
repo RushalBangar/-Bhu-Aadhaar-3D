@@ -1,4 +1,3 @@
-import { shakeGeometry } from './scene3d.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getFirestore, collection, getDocs, query, where, limit, or } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -198,7 +197,7 @@ document.getElementById('prop-parking').addEventListener('click', async () => {
                 // Real conflict from database
                 conflictAlert.style.display = 'flex';
                 conflictMessage.textContent = `Conflict: Slot ${slotNumber} is legally assigned to Unit ${data.unit_number || 'another unit'} (${data.owner_name || 'Registered Owner'})!`;
-                shakeGeometry();
+                window.dispatchEvent(new CustomEvent('shake-unit'));
                 return;
             }
         }

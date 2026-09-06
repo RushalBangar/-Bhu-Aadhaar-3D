@@ -149,6 +149,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             let isNearby = false;
 
             ring.forEach((coord, index) => {
+                if (!coord || isNaN(coord[0]) || isNaN(coord[1])) return;
                 const x = (coord[0] - centerLng) * coordScale;
                 const y = (coord[1] - centerLat) * coordScale;
                 if (Math.abs(x) < 1000 && Math.abs(y) < 1000) isNearby = true;
@@ -156,13 +157,22 @@ window.addEventListener('DOMContentLoaded', async () => {
                 else shape.lineTo(x, y);
             });
 
-            if (!isNearby) return;
+            if (!isNearby || shape.getPoints().length < 3) return;
 
-            const numFloors = building.total_floors || (Math.floor(Math.random() * 5) + 2);
-            const totalHeight = building.height_meters || (numFloors * 3);
+            let numFloors = parseInt(building.total_floors);
+            if (isNaN(numFloors) || numFloors < 1) {
+                numFloors = Math.floor(Math.random() * 5) + 2;
+            }
+
+            let totalHeight = parseFloat(building.height_meters);
+            if (isNaN(totalHeight) || totalHeight <= 0) {
+                totalHeight = numFloors * 3;
+            }
+
             const floorHeight = totalHeight / numFloors;
+            const validDepth = Math.max(0.1, floorHeight - 0.2);
 
-            const extrudeSettings = { depth: floorHeight - 0.2, bevelEnabled: false };
+            const extrudeSettings = { depth: validDepth, bevelEnabled: false };
             const floorGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
             
             const bGroup = new THREE.Group();
@@ -442,7 +452,7 @@ function animate() {
 animate();
 
 // Helper to shake geometry on conflict
-export function shakeGeometry() {
+window.addEventListener('shake-unit', () => {
     if (selectedUnit) {
         const originalX = selectedUnit.position.x;
         let count = 0;
@@ -455,4 +465,4 @@ export function shakeGeometry() {
             }
         }, 30);
     }
-}
+});
