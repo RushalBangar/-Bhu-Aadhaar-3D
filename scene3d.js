@@ -80,9 +80,7 @@ const materialHover = new THREE.MeshStandardMaterial({
     opacity: 0.7
 });
 
-const buildingGroup = new THREE.Group();
 buildingGroup.name = 'buildings';
-scene.add(buildingGroup);
 
 // --- Real-world Data Integration ---
 const centerLng = 73.7898;
