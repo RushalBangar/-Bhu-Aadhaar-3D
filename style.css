@@ -225,8 +225,8 @@ body {
 }
 
 .role-toggle select option {
-    background-color: var(--surface);
-    color: var(--text-primary);
+    background-color: #ffffff;
+    color: #000000;
 }
 
 /* ===== BUTTONS ===== */
