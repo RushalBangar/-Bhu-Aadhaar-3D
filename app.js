@@ -280,7 +280,7 @@ window.addEventListener('scene-ready', () => {
 
 // Update data stats
 window.addEventListener('stats-update', (e) => {
-    const { parcels, amenities } = e.detail;
+    const { parcels, amenities, floors, units } = e.detail;
     if (parcels !== undefined) {
         const el = document.getElementById('statParcels');
         if (el) el.textContent = parcels.toLocaleString();
@@ -288,6 +288,14 @@ window.addEventListener('stats-update', (e) => {
     if (amenities !== undefined) {
         const el = document.getElementById('statAmenities');
         if (el) el.textContent = amenities.toLocaleString();
+    }
+    if (floors !== undefined) {
+        const el = document.getElementById('statFloors');
+        if (el) el.textContent = floors.toLocaleString();
+    }
+    if (units !== undefined) {
+        const el = document.getElementById('statUnits');
+        if (el) el.textContent = units.toLocaleString();
     }
 });
 

@@ -222,6 +222,15 @@ window.addEventListener('DOMContentLoaded', async () => {
             buildingGroup.add(bGroup);
         });
 
+        // Calculate and dispatch building stats
+        let totalFloors = 0;
+        let totalUnits = 0;
+        buildingGroup.children.forEach(bg => {
+            totalFloors = Math.max(totalFloors, bg.children.length);
+            totalUnits += bg.children.length;
+        });
+        window.dispatchEvent(new CustomEvent('stats-update', { detail: { floors: totalFloors, units: totalUnits } }));
+
         // --- Load Amenities ---
         const amenities = await fetchAmenities();
         amenityGroup = new THREE.Group();

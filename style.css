@@ -224,6 +224,11 @@ body {
     border-color: var(--primary);
 }
 
+.role-toggle select option {
+    background-color: var(--surface);
+    color: var(--text-primary);
+}
+
 /* ===== BUTTONS ===== */
 button {
     cursor: pointer;
