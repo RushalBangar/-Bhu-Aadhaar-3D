@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import Water Amenities to Supabase</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>Import Water Amenities to Firebase</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #0B0F19; color: white; }
         .container { max-width: 600px; margin: 0 auto; background: #161F30; padding: 20px; border-radius: 8px; }
@@ -19,16 +18,26 @@
         <h2>Import Drinking Water Points</h2>
         <p>Select the <code>drinking_water.geojson</code> file downloaded from Overpass.</p>
         <input type="file" id="fileInput" accept=".geojson,application/json">
-        <button id="importBtn">Import to Supabase</button>
+        <button id="importBtn">Import to Firebase</button>
         <div id="log"></div>
     </div>
 
     <script type="module">
-        // -- Supabase Setup --
-        const { createClient } = supabase;
-        const supabaseUrl = 'https://tucpybvcrusbmtsdsvik.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1Y3B5YnZjcnVzYm10c2RzdmlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1ODk4MzksImV4cCI6MjEwNDE2NTgzOX0.KmSQcLxnaG4HVR5KMAGoaiHMo9DzktUKpgoigkIhSSs';
-        const client = createClient(supabaseUrl, supabaseKey);
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBrZWLQKmOIZ9fkcOpQSyjkvXp2wqkxl7M",
+            authDomain: "bhu-aadhaar-3d.firebaseapp.com",
+            projectId: "bhu-aadhaar-3d",
+            storageBucket: "bhu-aadhaar-3d.firebasestorage.app",
+            messagingSenderId: "994213836556",
+            appId: "1:994213836556:web:6dfc234346eedc4df2fb29",
+            measurementId: "G-P27GQZKEQ3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         const logEl = document.getElementById('log');
         function log(msg) {
@@ -62,19 +71,18 @@
                         const name = feature.properties.name || null;
                         
                         // Insert into amenities table
-                        const { error } = await client.from('amenities').insert({
-                            amenity_type: amenityType,
-                            name: name,
-                            location_geojson: feature.geometry
-                        });
-
-                        if (error) {
-                            log(`Error inserting ${amenityType} (${name}): ${error.message}`);
-                        } else {
+                        try {
+                            await addDoc(collection(db, 'amenities'), {
+                                amenity_type: amenityType,
+                                name: name,
+                                location_geojson: feature.geometry
+                            });
                             successCount++;
                             if (successCount % 10 === 0) {
                                 log(`Imported ${successCount} amenities...`);
                             }
+                        } catch (error) {
+                            log(`Error inserting ${amenityType} (${name}): ${error.message}`);
                         }
                     }
                     log(`Import complete! Successfully imported ${successCount} amenities.`);

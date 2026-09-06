@@ -1,31 +1,54 @@
 import { shakeGeometry } from './scene3d.js';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { getFirestore, collection, getDocs, query, where, limit, or } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBrZWLQKmOIZ9fkcOpQSyjkvXp2wqkxl7M",
+    authDomain: "bhu-aadhaar-3d.firebaseapp.com",
+    projectId: "bhu-aadhaar-3d",
+    storageBucket: "bhu-aadhaar-3d.firebasestorage.app",
+    messagingSenderId: "994213836556",
+    appId: "1:994213836556:web:6dfc234346eedc4df2fb29",
+    measurementId: "G-P27GQZKEQ3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 export async function fetchAmenities() {
-    const { data, error } = await client.from('amenities').select('*');
-    if (error) {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'amenities'));
+        const data = [];
+        querySnapshot.forEach((doc) => {
+            data.push({ id: doc.id, ...doc.data() });
+        });
+        return data;
+    } catch (error) {
         console.error('Error fetching amenities:', error);
         return [];
     }
-    return data || [];
 }
 
 export async function fetchParcels() {
     try {
         // 1. Fetch primary demo and adjacent parcels directly around 73.7898, 19.9975
-        const { data: primaryParcels } = await client
-            .from('parcels')
-            .select('boundary_geojson, ulpin_2d')
-            .ilike('ulpin_2d', '14MH27042918%');
+        const q1 = query(collection(db, 'parcels'), 
+            where('ulpin_2d', '>=', '14MH27042918'), 
+            where('ulpin_2d', '<=', '14MH27042918\uf8ff')
+        );
+        const snapshot1 = await getDocs(q1);
+        const primaryParcels = [];
+        snapshot1.forEach(doc => primaryParcels.push(doc.data()));
 
         // 2. Fetch additional parcels from database
-        const { data: extraParcels } = await client
-            .from('parcels')
-            .select('boundary_geojson, ulpin_2d')
-            .limit(500);
+        const q2 = query(collection(db, 'parcels'), limit(500));
+        const snapshot2 = await getDocs(q2);
+        const extraParcels = [];
+        snapshot2.forEach(doc => extraParcels.push(doc.data()));
 
         const map = new Map();
-        (primaryParcels || []).forEach(p => map.set(p.ulpin_2d, p));
-        (extraParcels || []).forEach(p => map.set(p.ulpin_2d, p));
+        primaryParcels.forEach(p => map.set(p.ulpin_2d, p));
+        extraParcels.forEach(p => map.set(p.ulpin_2d, p));
 
         return Array.from(map.values());
     } catch (err) {
@@ -49,11 +72,7 @@ export function generate3DUlpin(params) {
     return `${params.parcelUlpin2d}-${floorFormatted}-U${unitClean}-Z${zHeight}`;
 }
 
-// -- Supabase Setup --
-const { createClient } = supabase;
-const supabaseUrl = 'https://tucpybvcrusbmtsdsvik.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1Y3B5YnZjcnVzYm10c2RzdmlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1ODk4MzksImV4cCI6MjEwNDE2NTgzOX0.KmSQcLxnaG4HVR5KMAGoaiHMo9DzktUKpgoigkIhSSs';
-const client = createClient(supabaseUrl, supabaseKey);
+// Firebase Setup completed above
 
 // UI Elements
 const propertyCard = document.getElementById('property-card');
@@ -82,21 +101,21 @@ window.addEventListener('unit-selected', async (e) => {
     propParking.textContent = data.parking || '-';
     conflictAlert.style.display = 'none';
 
-    // If unit has 3D ULPIN, query Supabase for live verified records
+    // If unit has 3D ULPIN, query Firebase for live verified records
     if (data.isUnit && data.ulpin3d) {
         try {
-            const { data: dbUnit } = await client
-                .from('units')
-                .select('*, encumbrances(*), parking_slots(*)')
-                .eq('ulpin_3d', data.ulpin3d)
-                .maybeSingle();
+            const q = query(collection(db, 'units'), where('ulpin_3d', '==', data.ulpin3d));
+            const querySnapshot = await getDocs(q);
 
-            if (dbUnit) {
-                propOwner.textContent = dbUnit.owner_name;
-                propArea.textContent = `${dbUnit.carpet_area_sqft} sq ft`;
+            if (!querySnapshot.empty) {
+                const dbUnit = querySnapshot.docs[0].data();
+                propOwner.textContent = dbUnit.owner_name || propOwner.textContent;
+                propArea.textContent = `${dbUnit.carpet_area_sqft || 750} sq ft`;
+                
                 if (dbUnit.parking_slots && dbUnit.parking_slots.length > 0) {
-                    propParking.textContent = dbUnit.parking_slots[0].slot_number;
+                    propParking.textContent = dbUnit.parking_slots[0].slot_number || dbUnit.parking_slots[0];
                 }
+                
                 const activeLien = dbUnit.encumbrances?.find(enc => enc.status === 'ACTIVE');
                 if (activeLien) {
                     propLien.textContent = `Active Mortgage (${activeLien.bank_name})`;
@@ -108,7 +127,7 @@ window.addEventListener('unit-selected', async (e) => {
                 return;
             }
         } catch (err) {
-            console.error('Error fetching unit from Supabase:', err);
+            console.error('Error fetching unit from Firebase:', err);
         }
     }
 
@@ -128,33 +147,36 @@ document.getElementById('closePropertyCard').addEventListener('click', () => {
     setTimeout(() => { propertyCard.style.display = 'none'; }, 350);
 });
 
-// Parking conflict check (queries Supabase live)
+// Parking conflict check (queries Firebase live)
 document.getElementById('prop-parking').addEventListener('click', async () => {
     const rawSlot = propParking.textContent.trim();
     const slotNumber = rawSlot.split(' ')[0];
     if (!slotNumber || slotNumber === '-' || slotNumber === 'N/A') return;
 
     try {
-        const { data, error } = await client.from('parking_slots')
-            .select('*, units(unit_number, owner_name)')
-            .eq('slot_number', slotNumber)
-            .maybeSingle();
+        const q = query(collection(db, 'parking_slots'), where('slot_number', '==', slotNumber));
+        const snapshot = await getDocs(q);
 
-        if (data && data.assigned_unit_id) {
-            // Real conflict from database
-            const unit = data.units;
-            conflictAlert.style.display = 'flex';
-            conflictMessage.textContent = `Conflict: Slot ${slotNumber} is legally assigned to Unit ${unit ? unit.unit_number : 'another unit'} (${unit ? unit.owner_name : 'Registered Owner'})!`;
-            shakeGeometry();
-        } else {
-            conflictAlert.style.display = 'none';
-            propParking.style.color = '#10B981';
-            propParking.textContent = `${slotNumber} ✓ Verified`;
-            setTimeout(() => {
-                propParking.style.color = '';
-                propParking.textContent = slotNumber;
-            }, 2000);
+        if (!snapshot.empty) {
+            const data = snapshot.docs[0].data();
+            if (data.assigned_unit_id || data.unit_number) {
+                // Real conflict from database
+                conflictAlert.style.display = 'flex';
+                conflictMessage.textContent = `Conflict: Slot ${slotNumber} is legally assigned to Unit ${data.unit_number || 'another unit'} (${data.owner_name || 'Registered Owner'})!`;
+                shakeGeometry();
+                return;
+            }
         }
+        
+        // No conflict found
+        conflictAlert.style.display = 'none';
+        propParking.style.color = '#10B981';
+        propParking.textContent = `${slotNumber} ✓ Verified`;
+        setTimeout(() => {
+            propParking.style.color = '';
+            propParking.textContent = slotNumber;
+        }, 2000);
+        
     } catch (e) {
         console.error('Parking conflict check error:', e);
     }
@@ -247,24 +269,55 @@ searchInput.addEventListener('input', (e) => {
         return;
     }
 
-    // Debounce to avoid hammering Supabase
+    // Debounce to avoid hammering Firebase
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(async () => {
         try {
-            // Search both parcels and 3D units in parallel
+            // Firebase doesn't have an exact equivalent to ilike. We'll use prefix match 
+            // for ulpin_2d and ulpin_3d, and fetch some results to filter on the client.
+            const queryUpper = query.toUpperCase();
+            
+            const qParcels = query(collection(db, 'parcels'), 
+                or(
+                    where('ulpin_2d', '>=', queryUpper),
+                    where('survey_number', '>=', queryUpper)
+                ),
+                limit(10)
+            );
+            
+            const qUnits = query(collection(db, 'units'), 
+                or(
+                    where('ulpin_3d', '>=', queryUpper),
+                    where('unit_number', '>=', queryUpper)
+                ),
+                limit(10)
+            );
+
             const [parcelRes, unitRes] = await Promise.all([
-                client.from('parcels')
-                    .select('ulpin_2d, survey_number, district, village')
-                    .or(`ulpin_2d.ilike.%${query}%,survey_number.ilike.%${query}%`)
-                    .limit(4),
-                client.from('units')
-                    .select('ulpin_3d, unit_number, owner_name')
-                    .or(`ulpin_3d.ilike.%${query}%,unit_number.ilike.%${query}%,owner_name.ilike.%${query}%`)
-                    .limit(4)
+                getDocs(qParcels),
+                getDocs(qUnits)
             ]);
 
-            const parcels = parcelRes.data || [];
-            const units = unitRes.data || [];
+            let parcels = [];
+            parcelRes.forEach(doc => {
+                const data = doc.data();
+                if ((data.ulpin_2d && data.ulpin_2d.includes(queryUpper)) || 
+                    (data.survey_number && data.survey_number.toUpperCase().includes(queryUpper))) {
+                    parcels.push(data);
+                }
+            });
+            parcels = parcels.slice(0, 4);
+            
+            let units = [];
+            unitRes.forEach(doc => {
+                const data = doc.data();
+                if ((data.ulpin_3d && data.ulpin_3d.includes(queryUpper)) || 
+                    (data.unit_number && data.unit_number.toUpperCase().includes(queryUpper)) ||
+                    (data.owner_name && data.owner_name.toUpperCase().includes(queryUpper))) {
+                    units.push(data);
+                }
+            });
+            units = units.slice(0, 4);
 
             if (parcels.length === 0 && units.length === 0) {
                 searchResults.style.display = 'none';
