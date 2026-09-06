@@ -35,6 +35,7 @@ const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.05;
+controls.target.set(0, 10, 0);
 controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 // Lighting
@@ -46,7 +47,7 @@ dirLight.position.set(50, 100, 50);
 scene.add(dirLight);
 
 // Ground Plane
-const gridHelper = new THREE.GridHelper(200, 50, 0x161F30, 0x161F30);
+const gridHelper = new THREE.GridHelper(200, 50, 0x1E3A5F, 0x1E3A5F);
 scene.add(gridHelper);
 
 const groundGeo = new THREE.PlaneGeometry(200, 200);
@@ -91,8 +92,10 @@ const coordScale = 100000;
 let parcelGroup = null;
 let amenityGroup = null;
 
-window.addEventListener('DOMContentLoaded', async () => {
+// ES modules execute after DOMContentLoaded, so we can use an immediate async IIFE
+(async () => {
     try {
+        console.log('Scene3D: Starting data load...');
         // --- Load Parcels ---
         const parcels = await fetchParcels();
         parcelGroup = new THREE.Group();
@@ -279,8 +282,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Signal scene is ready (after all data loaded)
+    console.log('Scene3D: Data loaded, dispatching scene-ready.');
     window.dispatchEvent(new CustomEvent('scene-ready'));
-});
+})();
 
 // --- Interaction / Raycasting ---
 const raycaster = new THREE.Raycaster();
