@@ -366,6 +366,14 @@ window.addEventListener('select-unit', (e) => {
     );
     if (match) {
         selectUnitMesh(match);
+        // Move camera to selected unit
+        const pos = new THREE.Vector3();
+        match.getWorldPosition(pos);
+        camera.position.set(pos.x + 20, pos.y + 20, pos.z + 20);
+        controls.target.copy(pos);
+        controls.update();
+    } else {
+        alert('No matching 3D Unit or Parcel found.');
     }
 });
 
@@ -425,8 +433,28 @@ document.getElementById('explodeBtn').addEventListener('click', () => {
     });
 });
 
-// --- Reset Camera ---
-document.getElementById('btnReset').addEventListener('click', () => {
+// --- Camera Controls ---
+const btnOrbit = document.getElementById('btnOrbit');
+const btnPan = document.getElementById('btnPan');
+const btnReset = document.getElementById('btnReset');
+
+if (btnOrbit && btnPan) {
+    btnOrbit.addEventListener('click', () => {
+        btnOrbit.classList.add('active');
+        btnPan.classList.remove('active');
+        controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+        controls.touches.ONE = THREE.TOUCH.ROTATE;
+    });
+
+    btnPan.addEventListener('click', () => {
+        btnPan.classList.add('active');
+        btnOrbit.classList.remove('active');
+        controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+        controls.touches.ONE = THREE.TOUCH.PAN;
+    });
+}
+
+btnReset.addEventListener('click', () => {
     camera.position.set(30, 40, 50);
     controls.target.set(0, 15, 0);
     controls.update();

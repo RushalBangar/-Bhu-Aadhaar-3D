@@ -415,12 +415,30 @@ document.addEventListener('click', (e) => {
         searchResults.style.display = 'none';
     }
 });
+// Execute direct search for typed ULPIN
+function executeSearch() {
+    const query = searchInput.value.trim().toUpperCase();
+    if (!query) return;
+    
+    // Hide autocomplete results
+    searchResults.style.display = 'none';
+
+    // Dispatch select-unit which scene3d.js listens to
+    window.dispatchEvent(new CustomEvent('select-unit', { 
+        detail: { ulpin3d: query, unitNumber: query } 
+    }));
+}
 
 // Search button click
-document.getElementById('searchBtn').addEventListener('click', () => {
-    searchInput.dispatchEvent(new Event('input'));
-});
+document.getElementById('searchBtn').addEventListener('click', executeSearch);
 
+// Enter key press
+searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        executeSearch();
+    }
+});
 // Download PDF
 document.getElementById('downloadPdfBtn').addEventListener('click', () => {
     const ulpin = propUlpin.textContent;
