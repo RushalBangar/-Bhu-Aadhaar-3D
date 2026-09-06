@@ -468,12 +468,92 @@ toggles.forEach(t => {
         });
     }
 });
-// Download PDF
-document.getElementById('downloadPdfBtn').addEventListener('click', () => {
-    const ulpin = propUlpin.textContent;
-    if (!ulpin || ulpin === '-') {
-        alert('Please select a unit first.');
-        return;
+// --- Property Inspector Panel ---
+const propertyCard = document.getElementById('property-card');
+const propUlpin = document.getElementById('prop-ulpin');
+const propOwner = document.getElementById('prop-owner');
+const propArea = document.getElementById('prop-area');
+const propZaxis = document.getElementById('prop-zaxis');
+const propParking = document.getElementById('prop-parking');
+const propLien = document.getElementById('prop-lien');
+const closePropertyCard = document.getElementById('closePropertyCard');
+
+window.addEventListener('unit-selected', (e) => {
+    const data = e.detail;
+    if (!data) return;
+    
+    propertyCard.style.display = 'block';
+    propUlpin.textContent = data.ulpin3d || 'N/A';
+    propOwner.textContent = data.owner || 'Unknown';
+    propArea.textContent = data.carpetArea ? `${data.carpetArea} sq.m` : 'N/A';
+    
+    if (propZaxis) {
+        if (data.zBottom !== undefined && data.zTop !== undefined) {
+            propZaxis.innerHTML = `${data.zBottom.toFixed(1)}m &rarr; ${data.zTop.toFixed(1)}m`;
+        } else {
+            propZaxis.textContent = 'N/A';
+        }
     }
-    alert(`Downloading Official 3D Property Card for ${ulpin}`);
+    
+    if (data.parking && data.parking !== 'N/A') {
+        propParking.innerHTML = `<span style="color: #10B981;">Yes (${data.parking})</span>`;
+    } else {
+        propParking.innerHTML = `<span style="color: #6B7280;">None</span>`;
+    }
+
+    if (data.hasLien) {
+        propLien.textContent = 'Active Lien (Bank)';
+        propLien.className = 'value status-badge badge-error';
+    } else {
+        propLien.textContent = 'Clear Title';
+        propLien.className = 'value status-badge badge-success';
+    }
 });
+
+if (closePropertyCard) {
+    closePropertyCard.addEventListener('click', () => {
+        propertyCard.style.display = 'none';
+    });
+}
+
+// --- Role Switcher ---
+const roleSelect = document.getElementById('roleSelect');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+let currentRole = 'citizen';
+
+if (roleSelect) {
+    roleSelect.addEventListener('change', (e) => {
+        currentRole = e.target.value;
+        
+        // Example UI changes based on role
+        if (currentRole === 'bank') {
+            downloadPdfBtn.innerHTML = `<span class="material-icons-round">gavel</span> Initiate Foreclosure`;
+            downloadPdfBtn.className = 'btn btn-danger btn-icon';
+        } else if (currentRole === 'officer') {
+            downloadPdfBtn.innerHTML = `<span class="material-icons-round">verified</span> Validate Title`;
+            downloadPdfBtn.className = 'btn btn-primary btn-icon';
+        } else {
+            downloadPdfBtn.innerHTML = `<span class="material-icons-round">picture_as_pdf</span> Download 3D Property Card`;
+            downloadPdfBtn.className = 'btn btn-primary btn-icon';
+        }
+    });
+}
+
+// Download/Action Button
+if (downloadPdfBtn) {
+    downloadPdfBtn.addEventListener('click', () => {
+        const ulpin = propUlpin.textContent;
+        if (!ulpin || ulpin === '-') {
+            alert('Please select a unit first.');
+            return;
+        }
+        
+        if (currentRole === 'bank') {
+            alert(`Initiating foreclosure protocol for ULPIN: ${ulpin}`);
+        } else if (currentRole === 'officer') {
+            alert(`Title validated successfully for ULPIN: ${ulpin}`);
+        } else {
+            alert(`Downloading Official 3D Property Card for ${ulpin}`);
+        }
+    });
+}
