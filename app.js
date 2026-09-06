@@ -35,7 +35,10 @@ export async function fetchAmenities() {
 export async function fetchBuildings() {
     try {
         const q = query(collection(db, 'buildings'), limit(50));
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await Promise.race([
+            getDocs(q),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 5000))
+        ]);
         const data = [];
         querySnapshot.forEach((doc) => {
             const docData = doc.data();
@@ -44,10 +47,27 @@ export async function fetchBuildings() {
             }
             data.push({ id: doc.id, ...docData });
         });
+        
+        if (data.length === 0) throw new Error('No buildings found');
         return data;
     } catch (error) {
-        console.error('Error fetching buildings:', error);
-        return [];
+        console.warn('Firebase failed/empty, using fallback building:', error);
+        return [{
+            id: 'mock-building-1',
+            parcel_id: '14MH2704291845',
+            total_floors: 6,
+            height_meters: 18,
+            footprint_geojson: {
+                type: 'Polygon',
+                coordinates: [[
+                    [73.78980, 19.99750],
+                    [73.78990, 19.99750],
+                    [73.78990, 19.99760],
+                    [73.78980, 19.99760],
+                    [73.78980, 19.99750]
+                ]]
+            }
+        }];
     }
 }
 
@@ -58,7 +78,10 @@ export async function fetchParcels() {
             where('ulpin_2d', '>=', '14MH27042918'), 
             where('ulpin_2d', '<=', '14MH27042918\uf8ff')
         );
-        const snapshot1 = await getDocs(q1);
+        const snapshot1 = await Promise.race([
+            getDocs(q1),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 5000))
+        ]);
         const primaryParcels = [];
         snapshot1.forEach(doc => {
             const data = doc.data();
@@ -70,7 +93,10 @@ export async function fetchParcels() {
 
         // 2. Fetch additional parcels from database
         const q2 = query(collection(db, 'parcels'), limit(500));
-        const snapshot2 = await getDocs(q2);
+        const snapshot2 = await Promise.race([
+            getDocs(q2),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 5000))
+        ]);
         const extraParcels = [];
         snapshot2.forEach(doc => {
             const data = doc.data();
@@ -285,6 +311,16 @@ window.addEventListener('scene-ready', () => {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) overlay.classList.add('hidden');
 });
+
+// Failsafe: Unconditionally hide the loading spinner after 6 seconds
+// This ensures the UI is never permanently blocked due to a network/Vercel error.
+setTimeout(() => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay && !overlay.classList.contains('hidden')) {
+        console.warn('Failsafe triggered: Hiding loading spinner forcefully.');
+        overlay.classList.add('hidden');
+    }
+}, 6000);
 
 // Update data stats
 window.addEventListener('stats-update', (e) => {
