@@ -16,6 +16,8 @@ camera.position.set(40, 50, 60);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(width, height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
 // 4. Controls
@@ -30,7 +32,14 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
 scene.add(ambientLight);
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-dirLight.position.set(100, 150, 100);
+dirLight.position.set(0, 200, 100);
+dirLight.castShadow = true;
+dirLight.shadow.camera.left = -150;
+dirLight.shadow.camera.right = 150;
+dirLight.shadow.camera.top = 150;
+dirLight.shadow.camera.bottom = -150;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
 scene.add(dirLight);
 
 const secondaryLight = new THREE.DirectionalLight(0x3B82F6, 0.8);
@@ -41,6 +50,23 @@ scene.add(secondaryLight);
 const gridHelper = new THREE.GridHelper(300, 60, 0x3B82F6, 0x1F2937);
 gridHelper.position.y = 0;
 scene.add(gridHelper);
+
+// Ground plane for shadows
+const groundGeo = new THREE.PlaneGeometry(500, 500);
+const groundMat = new THREE.ShadowMaterial({ opacity: 0.5 });
+const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+groundMesh.rotation.x = -Math.PI / 2;
+groundMesh.receiveShadow = true;
+scene.add(groundMesh);
+
+// Air Rights Ceiling
+const airRightsMat = new THREE.MeshBasicMaterial({ color: 0xFF0000, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+const airRightsGeo = new THREE.PlaneGeometry(300, 300);
+const airRightsMesh = new THREE.Mesh(airRightsGeo, airRightsMat);
+airRightsMesh.rotation.x = -Math.PI / 2;
+airRightsMesh.position.y = 27.0; // sanctioned height limit
+airRightsMesh.visible = false;
+scene.add(airRightsMesh);
 
 // 7. Groups & Materials
 const buildingGroup = new THREE.Group();
@@ -105,6 +131,8 @@ function createFallbackDemoTower() {
             const geo = new THREE.BoxGeometry(bW / 2 - 0.5, floorH - 0.2, bD / 2 - 0.5);
             const mesh = new THREE.Mesh(geo, materialDefault.clone());
             mesh.position.set(u.x, y + floorH / 2, u.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
 
             const floorNumber = f;
             const unitNumber = `${f}0${u.num}`;
@@ -147,6 +175,7 @@ function createFallbackDemoTower() {
     const baseGeo = new THREE.BoxGeometry(bW + 4, 3, bD + 4);
     const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({ color: 0x374151, transparent: true, opacity: 0.6 }));
     baseMesh.position.set(0, -1.5, 0);
+    baseMesh.receiveShadow = true;
     baseMesh.userData = { originalY: -1.5, targetY: -1.5, floorIndex: 0 };
     bGroup.add(baseMesh);
 
@@ -208,6 +237,8 @@ function createFallbackDemoTower() {
                     const unitMesh = new THREE.Mesh(floorGeo, materialDefault.clone());
                     unitMesh.rotation.x = -Math.PI / 2;
                     unitMesh.position.y = i * floorHeight;
+                    unitMesh.castShadow = true;
+                    unitMesh.receiveShadow = true;
 
                     const floorNumber = i + 1;
                     const unitNumber = `${floorNumber}01`;
@@ -405,6 +436,34 @@ window.addEventListener('filter-floors', (e) => {
             floor.visible = maxFloor === 0 || floor.userData.floorIndex <= maxFloor;
         });
     });
+});
+
+window.addEventListener('time-change', (e) => {
+    const time = e.detail; // 6 to 18
+    const angle = ((time - 6) / 12) * Math.PI - (Math.PI / 2);
+    const radius = 200;
+    dirLight.position.x = radius * Math.sin(angle);
+    dirLight.position.y = radius * Math.cos(angle);
+    dirLight.position.z = 100;
+    dirLight.intensity = Math.max(0.1, Math.cos(angle) * 1.5);
+});
+
+window.addEventListener('toggle-air-rights', (e) => {
+    airRightsMesh.visible = e.detail;
+});
+
+window.addEventListener('balcony-view', () => {
+    if (selectedUnit) {
+        const box = new THREE.Box3().setFromObject(selectedUnit);
+        const center = box.getCenter(new THREE.Vector3());
+        
+        // Position camera inside the unit, looking outward (+x, +z direction)
+        camera.position.set(center.x, center.y, center.z + 5);
+        controls.target.set(center.x + 20, center.y - 5, center.z + 20); // Look outwards and slightly down
+        controls.update();
+    } else {
+        alert("Select a unit first to view from its balcony.");
+    }
 });
 
 let isExploded = false;

@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getFirestore, collection, getDocs, query, where, limit, or } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { initCesium, flyToBuilding } from './cesium.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyBrZWLQKmOIZ9fkcOpQSyjkvXp2wqkxl7M",
@@ -296,6 +297,10 @@ document.getElementById('layerAmenities').addEventListener('change', (e) => {
     window.dispatchEvent(new CustomEvent('toggle-amenities', { detail: e.target.checked }));
 });
 
+document.getElementById('layerAirRights')?.addEventListener('change', (e) => {
+    window.dispatchEvent(new CustomEvent('toggle-air-rights', { detail: e.target.checked }));
+});
+
 // Floor Slider
 const floorSlider = document.getElementById('floorSlider');
 const floorValue = document.getElementById('floorValue');
@@ -305,6 +310,54 @@ floorSlider.addEventListener('input', (e) => {
     floorValue.textContent = val >= 9 ? 'All' : `F${val}`;
     window.dispatchEvent(new CustomEvent('filter-floors', { detail: val }));
 });
+
+// Time Slider
+const timeSlider = document.getElementById('timeSlider');
+const timeValue = document.getElementById('timeValue');
+if (timeSlider) {
+    timeSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        const hours = Math.floor(val);
+        const mins = (val % 1 === 0) ? '00' : '30';
+        timeValue.textContent = `${hours}:${mins}`;
+        window.dispatchEvent(new CustomEvent('time-change', { detail: val }));
+    });
+}
+
+// --- Cesium Toggle Logic ---
+const toggleViewBtn = document.getElementById('toggleViewBtn');
+const toggleViewText = document.getElementById('toggleViewText');
+const canvasContainer = document.getElementById('canvas-container');
+const cesiumContainer = document.getElementById('cesiumContainer');
+let isCityView = false;
+
+if (toggleViewBtn) {
+    toggleViewBtn.addEventListener('click', () => {
+        isCityView = !isCityView;
+        
+        if (isCityView) {
+            // Switch to Cesium
+            canvasContainer.style.display = 'none';
+            cesiumContainer.style.display = 'block';
+            toggleViewText.textContent = "Switch to Building View";
+            
+            // Hide Property Card if open
+            const propertyCard = document.getElementById('property-card');
+            if (propertyCard && propertyCard.classList.contains('open')) {
+                document.getElementById('closePropertyCard')?.click();
+            }
+            
+            // Initialize Cesium if it hasn't been already
+            initCesium();
+            flyToBuilding();
+        } else {
+            // Switch to Three.js
+            cesiumContainer.style.display = 'none';
+            canvasContainer.style.display = 'block';
+            toggleViewText.textContent = "Switch to City View";
+        }
+    });
+}
 
 // Loading overlay dismiss
 window.addEventListener('scene-ready', () => {
@@ -492,26 +545,77 @@ searchInput.addEventListener('keypress', (e) => {
     }
 });
 
-// --- Role Switcher ---
+// --- Role Switcher & New Buttons ---
 const roleSelect = document.getElementById('roleSelect');
+const dynamicRoleActions = document.getElementById('dynamicRoleActions');
+const testFraudBtn = document.getElementById('testFraudBtn');
+const balconyViewBtn = document.getElementById('balconyViewBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 let currentRole = 'citizen';
+
+function renderRoleActions(role) {
+    if (!dynamicRoleActions) return;
+    
+    if (role === 'bank') {
+        dynamicRoleActions.style.display = 'block';
+        dynamicRoleActions.innerHTML = `
+            <button id="lienBtn" class="btn btn-icon" style="border-color: #F59E0B; color: #F59E0B; width: 100%;">
+                <span class="material-icons-round">gavel</span> Register Mortgage Lien (SBI/HDFC)
+            </button>
+        `;
+        document.getElementById('lienBtn').addEventListener('click', () => {
+            const ulpin = propUlpin.textContent;
+            if (!ulpin || ulpin === '-') {
+                alert('Please select a unit first.');
+                return;
+            }
+            propLien.textContent = "Active Lien (SBI/HDFC)";
+            propLien.className = "value status-badge lien";
+            alert(`Mortgage Lien registered for ULPIN: ${ulpin}`);
+        });
+    } else if (role === 'officer') {
+        dynamicRoleActions.style.display = 'flex';
+        dynamicRoleActions.style.flexDirection = 'column';
+        dynamicRoleActions.style.gap = '8px';
+        dynamicRoleActions.innerHTML = `
+            <button id="auditBtn" class="btn btn-icon" style="border-color: #3B82F6; color: #3B82F6; width: 100%;">
+                <span class="material-icons-round">policy</span> Audit Sanctioned Height
+            </button>
+            <button id="approveBtn" class="btn btn-icon" style="border-color: #10B981; color: #10B981; width: 100%;">
+                <span class="material-icons-round">verified</span> Approve Property Mutation
+            </button>
+        `;
+        document.getElementById('auditBtn').addEventListener('click', () => {
+            alert('Sanctioned Height Audited: Within limits (27m).');
+        });
+        document.getElementById('approveBtn').addEventListener('click', () => {
+            alert('Property Mutation Approved & Signed.');
+        });
+    } else {
+        dynamicRoleActions.style.display = 'none';
+        dynamicRoleActions.innerHTML = '';
+    }
+}
 
 if (roleSelect) {
     roleSelect.addEventListener('change', (e) => {
         currentRole = e.target.value;
-        
-        // Example UI changes based on role
-        if (currentRole === 'bank') {
-            downloadPdfBtn.innerHTML = `<span class="material-icons-round">gavel</span> Initiate Foreclosure`;
-            downloadPdfBtn.className = 'btn btn-danger btn-icon';
-        } else if (currentRole === 'officer') {
-            downloadPdfBtn.innerHTML = `<span class="material-icons-round">verified</span> Validate Title`;
-            downloadPdfBtn.className = 'btn btn-primary btn-icon';
-        } else {
-            downloadPdfBtn.innerHTML = `<span class="material-icons-round">picture_as_pdf</span> Download 3D Property Card`;
-            downloadPdfBtn.className = 'btn btn-primary btn-icon';
-        }
+        renderRoleActions(currentRole);
+    });
+    renderRoleActions(currentRole);
+}
+
+if (testFraudBtn) {
+    testFraudBtn.addEventListener('click', () => {
+        conflictAlert.style.display = 'flex';
+        conflictMessage.innerHTML = `❌ TRANSACTION BLOCKED: Parking Slot P-22 is already legally tied to 3D-ULPIN ...-U904.`;
+        window.dispatchEvent(new CustomEvent('shake-unit'));
+    });
+}
+
+if (balconyViewBtn) {
+    balconyViewBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('balcony-view'));
     });
 }
 
@@ -523,12 +627,14 @@ if (downloadPdfBtn) {
             return;
         }
         
-        if (currentRole === 'bank') {
-            alert(`Initiating foreclosure protocol for ULPIN: ${ulpin}`);
-        } else if (currentRole === 'officer') {
-            alert(`Title validated successfully for ULPIN: ${ulpin}`);
-        } else {
-            alert(`Downloading Official 3D Property Card for ${ulpin}`);
-        }
+        // Populate print layout
+        document.getElementById('print-ulpin').textContent = ulpin;
+        document.getElementById('print-owner').textContent = propOwner.textContent;
+        document.getElementById('print-area').textContent = propArea.textContent;
+        document.getElementById('print-zaxis').textContent = propZaxis ? propZaxis.textContent : 'N/A';
+        document.getElementById('print-parking').textContent = propParking.textContent;
+        document.getElementById('print-lien-status').textContent = propLien.textContent;
+        
+        window.print();
     });
 }

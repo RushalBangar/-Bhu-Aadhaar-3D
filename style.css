@@ -1055,3 +1055,129 @@ button {
         height: 40px;
     }
 }
+
+/* ===== PRINT LAYOUT ===== */
+.print-layout {
+    display: none;
+    background: white;
+    color: black;
+    font-family: 'Inter', sans-serif;
+    padding: 2cm;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+}
+
+.print-header {
+    text-align: center;
+    border-bottom: 2px solid #333;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.print-logo {
+    height: 80px;
+    margin-bottom: 15px;
+}
+
+.print-title h2 {
+    font-size: 24px;
+    margin: 0 0 5px 0;
+}
+
+.print-title h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #555;
+    margin: 0;
+}
+
+.print-body {
+    margin-bottom: 40px;
+}
+
+.print-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 16px;
+}
+
+.print-row strong {
+    color: #333;
+}
+
+.print-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 50px;
+}
+
+.qr-placeholder {
+    text-align: center;
+}
+
+.qr-placeholder img {
+    width: 100px;
+    height: 100px;
+}
+
+.qr-placeholder p {
+    font-size: 12px;
+    margin-top: 5px;
+    color: #555;
+}
+
+.signature {
+    text-align: center;
+}
+
+.signature p {
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    body {
+        background: white;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+    }
+
+    #print-layout, #print-layout * {
+        visibility: visible;
+    }
+
+    #print-layout {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+}
+
+/* ===== CESIUM CONTAINER ===== */
+.cesium-container {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+/* Hide some default Cesium UI elements to maintain clean look */
+.cesium-viewer-bottom,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-animationContainer,
+.cesium-viewer-fullscreenContainer {
+    display: none !important;
+}

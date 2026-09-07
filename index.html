@@ -20,6 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <!-- CesiumJS CDN -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 </head>
 <body>
     <!-- Top Navigation Bar -->
@@ -116,6 +119,12 @@
             <div class="sidebar-section">
                 <h3><span class="material-icons-round section-icon">view_in_ar</span> 3D Controls</h3>
                 <div class="action-group">
+                    <button id="toggleViewBtn" class="btn btn-primary btn-icon" style="margin-bottom: 8px;">
+                        <span class="material-icons-round">public</span>
+                        <span id="toggleViewText">Switch to City View</span>
+                    </button>
+                </div>
+                <div class="action-group">
                     <button id="explodeBtn" class="btn btn-icon">
                         <span class="material-icons-round">unfold_more</span>
                         Exploded View
@@ -129,6 +138,16 @@
                     <div class="slider-track">
                         <input type="range" id="floorSlider" min="0" max="9" value="9">
                         <span class="slider-value" id="floorValue">All</span>
+                    </div>
+                </div>
+                <div class="slider-group">
+                    <label for="timeSlider">
+                        <span class="material-icons-round section-icon">light_mode</span>
+                        Time of Day (Sun)
+                    </label>
+                    <div class="slider-track">
+                        <input type="range" id="timeSlider" min="6" max="18" value="12" step="0.5">
+                        <span class="slider-value" id="timeValue">12:00</span>
                     </div>
                 </div>
             </div>
@@ -178,6 +197,10 @@
             </div>
         </main>
 
+        <!-- Cesium Globe Container -->
+        <main class="cesium-container" id="cesiumContainer" style="display: none;">
+        </main>
+
         <!-- Right Sidebar: Property Inspector Card (Bottom Sheet on Mobile) -->
         <aside class="sidebar right-sidebar glass" id="property-card" style="display: none;">
             <div class="sheet-handle-bar mobile-only">
@@ -222,10 +245,28 @@
 
             <div class="sidebar-divider"></div>
 
+            <div class="action-group" id="dynamicRoleActions" style="display: none; margin-bottom: 8px;">
+                <!-- Filled dynamically by app.js -->
+            </div>
+
+            <div class="action-group">
+                <button id="testFraudBtn" class="btn btn-icon" style="border-color: var(--conflict); color: var(--conflict); margin-bottom: 8px;">
+                    <span class="material-icons-round">security</span>
+                    Test Duplicate Parking
+                </button>
+            </div>
+
+            <div class="action-group">
+                <button id="balconyViewBtn" class="btn btn-icon" style="margin-bottom: 8px;">
+                    <span class="material-icons-round">visibility</span>
+                    View from Balcony
+                </button>
+            </div>
+
             <div class="action-group">
                 <button id="downloadPdfBtn" class="btn btn-primary btn-icon">
-                    <span class="material-icons-round">picture_as_pdf</span>
-                    Download 3D Property Card
+                    <span class="material-icons-round">print</span>
+                    Print 3D Property Card
                 </button>
             </div>
 
@@ -258,6 +299,34 @@
             <span class="coord-divider">|</span>
             <span class="material-icons-round coord-icon">tag</span>
             Active: <span id="activeParcelId" class="active-id">14MH2704291845</span>
+        </div>
+    </div>
+    <!-- Hidden Print Layout -->
+    <div id="print-layout" class="print-layout">
+        <div class="print-header">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg" alt="Govt Logo" class="print-logo">
+            <div class="print-title">
+                <h2>Government of Maharashtra</h2>
+                <h3>Official 3D Property Card (Bhu-Aadhaar)</h3>
+            </div>
+        </div>
+        <div class="print-body">
+            <div class="print-row"><strong>3D-ULPIN:</strong> <span id="print-ulpin"></span></div>
+            <div class="print-row"><strong>Owner Name:</strong> <span id="print-owner"></span></div>
+            <div class="print-row"><strong>Carpet Area:</strong> <span id="print-area"></span></div>
+            <div class="print-row"><strong>Vertical Extent (Z-axis):</strong> <span id="print-zaxis"></span></div>
+            <div class="print-row"><strong>Assigned Parking:</strong> <span id="print-parking"></span></div>
+            <div class="print-row"><strong>Status:</strong> <span id="print-lien-status"></span></div>
+        </div>
+        <div class="print-footer">
+            <div class="qr-placeholder">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://bhu-aadhaar-3-d.vercel.app/" alt="QR Code">
+                <p>Scan to verify 3D Twin</p>
+            </div>
+            <div class="signature">
+                <p>_______________________</p>
+                <p>Authorized Digital Signature</p>
+            </div>
         </div>
     </div>
 
