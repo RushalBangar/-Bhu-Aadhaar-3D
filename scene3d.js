@@ -215,9 +215,9 @@ function createFallbackDemoTower() {
                 let validCoords = 0;
 
                 ring.forEach((coord, idx) => {
-                    if (!coord || isNaN(coord[0]) || isNaN(coord)) return;
+                    if (!coord || isNaN(coord[0]) || isNaN(coord[1])) return;
                     const x = (coord[0] - centerLng) * coordScale;
-                    const z = -(coord - centerLat) * coordScale;
+                    const z = -(coord[1] - centerLat) * coordScale;
                     
                     if (idx === 0) shape.moveTo(x, -z);
                     else shape.lineTo(x, -z);
