@@ -1,4 +1,4 @@
-import { generate3DUlpin, fetchBuildings, fetchSingleBuilding, getBuildingsList } from './app.js?v=2.1.0';
+import { generate3DUlpin, fetchBuildings, fetchSingleBuilding, getBuildingsList } from './app.js?v=2.2.0';
 
 // ──────────────────────────────────────────────────────────
 // 1. SCENE SETUP
@@ -15,64 +15,56 @@ const height = container.clientHeight || window.innerHeight;
 const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 1000);
 camera.position.set(35, 40, 50);
 
-// Renderer: Safe initialization with fallback flags & try/catch safety net
-let renderer;
+// Safe WebGL Renderer Initialization
+let renderer = null;
+let controls = null;
+
 try {
     renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: false, // Disabling antialias prevents context creation failures on integrated GPUs
         alpha: true,
         powerPreference: "default",
-        failIfMajorPerformanceCaveat: false, // Prevents WebGL context failure on integrated GPUs
+        failIfMajorPerformanceCaveat: false,
         preserveDrawingBuffer: true
     });
-} catch (e) {
-    console.warn("Retrying WebGL with minimal fallback settings...", e);
-    try {
-        renderer = new THREE.WebGLRenderer({ antialias: false });
-    } catch (e2) {
-        console.error("Critical: WebGL not supported or context could not be created.", e2);
-        const errBanner = document.createElement('div');
-        errBanner.style.cssText = 'position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(239,68,68,0.9); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.4); text-align: center;';
-        errBanner.innerHTML = '⚠️ <strong>WebGL Context Error:</strong> Hardware acceleration disabled or GPU context lost. Please enable hardware acceleration in browser settings.';
-        container.appendChild(errBanner);
-    }
-}
-
-if (renderer) {
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
-}
 
-// Controls
-const controls = renderer ? new THREE.OrbitControls(camera, renderer.domElement) : null;
-if (controls) {
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
     controls.minDistance = 10;
     controls.maxDistance = 200;
     controls.target.set(0, 10, 0);
+} catch (e) {
+    console.warn("WebGL initialization failed:", e);
+    const errorBanner = document.getElementById('webgl-error-banner');
+    if (errorBanner) errorBanner.style.display = 'block';
+    window.dispatchEvent(new CustomEvent('scene-ready'));
 }
 
 // ──────────────────────────────────────────────────────────
 // 2. POST-PROCESSING (Bloom)
 // ──────────────────────────────────────────────────────────
 let composer = null;
-try {
-    const renderPass = new THREE.RenderPass(scene, camera);
-    const bloomPass = new THREE.UnrealBloomPass(
-        new THREE.Vector2(width, height), 0.4, 0.6, 0.85
-    );
-    composer = new THREE.EffectComposer(renderer);
-    composer.addPass(renderPass);
-    composer.addPass(bloomPass);
-} catch (e) {
-    console.warn('Post-processing unavailable, falling back to standard renderer:', e.message);
+if (renderer) {
+    try {
+        const renderPass = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(width, height), 0.4, 0.6, 0.85
+        );
+        composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderPass);
+        composer.addPass(bloomPass);
+    } catch (e) {
+        console.warn('Post-processing unavailable, falling back to standard renderer:', e.message);
+    }
 }
 
 // ──────────────────────────────────────────────────────────
@@ -462,10 +454,15 @@ function renderBuilding(buildingData) {
     const maxBldgDim = Math.max(bldgWidth, bldgDepth, totalHeight);
     const camDist = Math.max(maxBldgDim * 1.8, 30);
 
-    controls.target.set(0, totalHeight * 0.4, 0);
-    camera.position.set(camDist * 0.7, camDist * 0.6, camDist * 0.8);
-    camera.lookAt(controls.target);
-    controls.update();
+    if (controls) {
+        controls.target.set(0, totalHeight * 0.4, 0);
+        camera.position.set(camDist * 0.7, camDist * 0.6, camDist * 0.8);
+        camera.lookAt(controls.target);
+        controls.update();
+    } else {
+        camera.position.set(camDist * 0.7, camDist * 0.6, camDist * 0.8);
+        camera.lookAt(0, totalHeight * 0.4, 0);
+    }
 
     // Update air-rights plane position
     airRightsMesh.position.y = totalHeight + 3;
@@ -558,6 +555,7 @@ let hoveredUnit = null;
 let selectedUnit = null;
 
 function getIntersectedUnit(clientX, clientY) {
+    if (!renderer || !renderer.domElement) return null;
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -578,50 +576,52 @@ export function selectUnitMesh(unitMesh) {
     window.dispatchEvent(new CustomEvent('unit-selected', { detail: selectedUnit.userData }));
 }
 
-renderer.domElement.addEventListener('click', (e) => {
-    const hit = getIntersectedUnit(e.clientX, e.clientY);
-    if (hit) selectUnitMesh(hit);
-});
+if (renderer && renderer.domElement) {
+    renderer.domElement.addEventListener('click', (e) => {
+        const hit = getIntersectedUnit(e.clientX, e.clientY);
+        if (hit) selectUnitMesh(hit);
+    });
 
-renderer.domElement.addEventListener('mousemove', (e) => {
-    const hit = getIntersectedUnit(e.clientX, e.clientY);
-    if (hit) {
-        if (hoveredUnit !== hit) {
+    renderer.domElement.addEventListener('mousemove', (e) => {
+        const hit = getIntersectedUnit(e.clientX, e.clientY);
+        if (hit) {
+            if (hoveredUnit !== hit) {
+                if (hoveredUnit && hoveredUnit !== selectedUnit) {
+                    hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+                }
+                hoveredUnit = hit;
+                if (hoveredUnit !== selectedUnit) hoveredUnit.material.copy(materialHover);
+                renderer.domElement.style.cursor = 'pointer';
+            }
+        } else {
             if (hoveredUnit && hoveredUnit !== selectedUnit) {
                 hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
             }
-            hoveredUnit = hit;
-            if (hoveredUnit !== selectedUnit) hoveredUnit.material.copy(materialHover);
-            renderer.domElement.style.cursor = 'pointer';
+            hoveredUnit = null;
+            renderer.domElement.style.cursor = 'grab';
         }
-    } else {
-        if (hoveredUnit && hoveredUnit !== selectedUnit) {
-            hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
-        }
-        hoveredUnit = null;
-        renderer.domElement.style.cursor = 'grab';
-    }
-});
+    });
 
-// Touch support
-let touchStartX = 0, touchStartY = 0;
-renderer.domElement.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-    }
-}, { passive: true });
-
-renderer.domElement.addEventListener('touchend', (e) => {
-    if (e.changedTouches.length === 1) {
-        const dx = e.changedTouches[0].clientX - touchStartX;
-        const dy = e.changedTouches[0].clientY - touchStartY;
-        if (Math.hypot(dx, dy) < 10) {
-            const hit = getIntersectedUnit(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-            if (hit) selectUnitMesh(hit);
+    // Touch support
+    let touchStartX = 0, touchStartY = 0;
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
         }
-    }
-}, { passive: true });
+    }, { passive: true });
+
+    renderer.domElement.addEventListener('touchend', (e) => {
+        if (e.changedTouches.length === 1) {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = e.changedTouches[0].clientY - touchStartY;
+            if (Math.hypot(dx, dy) < 10) {
+                const hit = getIntersectedUnit(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+                if (hit) selectUnitMesh(hit);
+            }
+        }
+    }, { passive: true });
+}
 
 // ──────────────────────────────────────────────────────────
 // 10. SEARCH / UNIT SELECTION BY EVENT
@@ -638,8 +638,10 @@ window.addEventListener('select-unit', (e) => {
         const pos = new THREE.Vector3();
         match.getWorldPosition(pos);
         camera.position.set(pos.x + 15, pos.y + 10, pos.z + 15);
-        controls.target.copy(pos);
-        controls.update();
+        if (controls) {
+            controls.target.copy(pos);
+            controls.update();
+        }
     }
 });
 
@@ -702,8 +704,10 @@ window.addEventListener('balcony-view', () => {
         const box = new THREE.Box3().setFromObject(selectedUnit);
         const center = box.getCenter(new THREE.Vector3());
         camera.position.set(center.x, center.y, center.z + 3);
-        controls.target.set(center.x + 20, center.y - 3, center.z + 25);
-        controls.update();
+        if (controls) {
+            controls.target.set(center.x + 20, center.y - 3, center.z + 25);
+            controls.update();
+        }
     }
 });
 
@@ -742,14 +746,18 @@ if (btnOrbit && btnPan) {
     btnOrbit.addEventListener('click', () => {
         btnOrbit.classList.add('active');
         btnPan.classList.remove('active');
-        controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-        if (controls.touches) controls.touches.ONE = THREE.TOUCH.ROTATE;
+        if (controls) {
+            controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+            if (controls.touches) controls.touches.ONE = THREE.TOUCH.ROTATE;
+        }
     });
     btnPan.addEventListener('click', () => {
         btnPan.classList.add('active');
         btnOrbit.classList.remove('active');
-        controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
-        if (controls.touches) controls.touches.ONE = THREE.TOUCH.PAN;
+        if (controls) {
+            controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+            if (controls.touches) controls.touches.ONE = THREE.TOUCH.PAN;
+        }
     });
 }
 
@@ -762,8 +770,10 @@ if (btnReset) {
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z, 20);
             camera.position.set(maxDim * 0.7, maxDim * 0.6, maxDim * 0.8);
-            controls.target.copy(center);
-            controls.update();
+            if (controls) {
+                controls.target.copy(center);
+                controls.update();
+            }
         }
     });
 }
@@ -801,22 +811,32 @@ window.addEventListener('resize', () => {
 // ──────────────────────────────────────────────────────────
 function animate() {
     requestAnimationFrame(animate);
-    if (controls) controls.update();
 
-    // Smooth exploded-view interpolation
-    buildingGroup.children.forEach(bGroup => {
-        bGroup.children.forEach(floor => {
-            if (floor.userData.targetY !== undefined) {
-                floor.position.y += (floor.userData.targetY - floor.position.y) * 0.08;
-            }
+    // Only update controls if they exist and are not null:
+    if (typeof controls !== 'undefined' && controls) {
+        controls.update();
+    }
+
+    // Smooth Exploded View interpolation
+    if (buildingGroup && buildingGroup.children) {
+        buildingGroup.children.forEach(bGroup => {
+            bGroup.children.forEach(floor => {
+                if (floor.userData && floor.userData.targetY !== undefined) {
+                    floor.position.y += (floor.userData.targetY - floor.position.y) * 0.1;
+                }
+            });
         });
-    });
+    }
 
-    // Render with post-processing if available, otherwise standard
-    if (composer) {
+    // Safe render call:
+    if (typeof composer !== 'undefined' && composer) {
         composer.render();
-    } else if (renderer) {
+    } else if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
 }
-animate();
+
+// Only start the loop if renderer was successfully created:
+if (renderer) {
+    animate();
+}

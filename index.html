@@ -209,6 +209,11 @@
             </div>
 
             <!-- Three.js will render here -->
+            <!-- WebGL Error Fallback Banner -->
+            <div id="webgl-error-banner" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(220, 38, 38, 0.95); color: white; padding: 14px 28px; border-radius: 8px; font-weight: 600; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.4); text-align: center; max-width: 90%;">
+                ⚠️ WebGL context failed to initialize on this device. Hardware acceleration is disabled or unavailable. You can still inspect 2D/3D cadastral records in the side panel.
+            </div>
+
             <!-- Loading Overlay -->
             <div class="loading-overlay" id="loadingOverlay">
                 <div class="loader-content">
@@ -223,7 +228,7 @@
         </main>
 
         <!-- Right Sidebar: Property Inspector Card (Bottom Sheet on Mobile) -->
-        <aside class="sidebar right-sidebar glass" id="property-card" style="display: none;">
+        <aside class="sidebar right-sidebar glass inspector-panel" id="property-card" style="display: none;">
             <div class="sheet-handle-bar mobile-only">
                 <div class="sheet-handle"></div>
             </div>
@@ -382,7 +387,7 @@
     </div>
 
     <!-- Scripts -->
-    <script type="module" src="app.js?v=2.1.0"></script>
-    <script type="module" src="scene3d.js?v=2.1.0"></script>
+    <script type="module" src="app.js?v=2.2.0"></script>
+    <script type="module" src="scene3d.js?v=2.2.0"></script>
 </body>
 </html>

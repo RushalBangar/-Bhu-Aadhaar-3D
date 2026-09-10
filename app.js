@@ -592,25 +592,24 @@ searchInput?.addEventListener('input', (e) => {
                     const itemType = item.getAttribute('data-type');
                     const ulpin = item.getAttribute('data-ulpin');
                     const bIndex = item.getAttribute('data-bindex');
+                    const unitNum = item.getAttribute('data-unit');
                     searchInput.value = ulpin;
                     searchResults.style.display = 'none';
 
-                    if (bIndex !== '' && !isNaN(parseInt(bIndex))) {
-                        window.dispatchEvent(new CustomEvent('select-building', { 
-                            detail: { index: parseInt(bIndex) } 
-                        }));
-                    }
-
                     if (itemType === 'unit') {
-                        const unitNum = item.getAttribute('data-unit');
-                        setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('select-unit', { 
-                                detail: { ulpin3d: ulpin, unitNumber: unitNum } 
-                            }));
-                        }, 100);
+                        onSearchSuggestionSelected({
+                            ulpin3d: ulpin,
+                            unitNumber: unitNum,
+                            buildingIndex: bIndex
+                        });
                     } else {
                         const activeEl = document.getElementById('activeParcelId');
                         if (activeEl) activeEl.textContent = ulpin;
+                        if (bIndex !== '' && !isNaN(parseInt(bIndex))) {
+                            window.dispatchEvent(new CustomEvent('select-building', { 
+                                detail: { index: parseInt(bIndex) } 
+                            }));
+                        }
                     }
                 });
             });
@@ -628,6 +627,32 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Trigger the Inspector card and 3D selection when a unit/search item is selected
+export function onSearchSuggestionSelected(unitData) {
+    // Update the 3D ULPIN card details:
+    const card = document.getElementById('property-inspector') || document.querySelector('.inspector-panel') || document.getElementById('property-card');
+    if (card) {
+        card.classList.add('open');
+        card.style.display = 'block';
+    }
+
+    const ulpin = unitData.ulpin3d || unitData.ulpin || unitData.ulpin_3d;
+    const unitNum = unitData.unitNumber || unitData.unit || unitData.unit_number;
+
+    if (unitData.buildingIndex !== undefined && unitData.buildingIndex !== '' && !isNaN(parseInt(unitData.buildingIndex))) {
+        window.dispatchEvent(new CustomEvent('select-building', { 
+            detail: { index: parseInt(unitData.buildingIndex) } 
+        }));
+    }
+
+    // Highlight the unit in 3D if scene is available:
+    setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('select-unit', { 
+            detail: { ulpin3d: ulpin, unitNumber: unitNum } 
+        }));
+    }, 100);
+}
+
 // Execute direct search for typed ULPIN or property
 async function executeSearch() {
     const searchTerm = searchInput.value.trim().toUpperCase();
@@ -635,10 +660,10 @@ async function executeSearch() {
     
     searchResults.style.display = 'none';
 
-    // Dispatch select-unit which scene3d.js listens to
-    window.dispatchEvent(new CustomEvent('select-unit', { 
-        detail: { ulpin3d: searchTerm, unitNumber: searchTerm } 
-    }));
+    onSearchSuggestionSelected({
+        ulpin3d: searchTerm,
+        unitNumber: searchTerm
+    });
 }
 
 document.getElementById('searchBtn')?.addEventListener('click', executeSearch);
