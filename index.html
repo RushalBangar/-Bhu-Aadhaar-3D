@@ -130,6 +130,26 @@
                         Exploded View
                     </button>
                 </div>
+
+                <!-- Building Navigator -->
+                <div class="building-navigator">
+                    <label for="buildingSelector">
+                        <span class="material-icons-round section-icon">domain</span>
+                        Building
+                    </label>
+                    <div class="building-nav-row">
+                        <button id="prevBuildingBtn" class="nav-arrow-btn" title="Previous Building">
+                            <span class="material-icons-round">chevron_left</span>
+                        </button>
+                        <select id="buildingSelector" class="building-select">
+                            <option>Loading...</option>
+                        </select>
+                        <button id="nextBuildingBtn" class="nav-arrow-btn" title="Next Building">
+                            <span class="material-icons-round">chevron_right</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="slider-group">
                     <label for="floorSlider">
                         <span class="material-icons-round section-icon">stacked_bar_chart</span>
@@ -331,7 +351,7 @@
     </div>
 
     <!-- Scripts -->
-    <script type="module" src="app.js"></script>
-    <script type="module" src="scene3d.js"></script>
+    <script type="module" src="app.js?v=2.0.0"></script>
+    <script type="module" src="scene3d.js?v=2.0.0"></script>
 </body>
 </html>

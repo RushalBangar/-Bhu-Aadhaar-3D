@@ -1,74 +1,177 @@
-import { generate3DUlpin, fetchAmenities, fetchParcels, fetchBuildings } from './app.js';
+import { generate3DUlpin, fetchBuildings, fetchSingleBuilding, getBuildingsList } from './app.js?v=2.0.0';
 
-// 1. Setup Three.js Scene
+// ──────────────────────────────────────────────────────────
+// 1. SCENE SETUP
+// ──────────────────────────────────────────────────────────
 const container = document.getElementById('canvas-container') || document.body;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0B0F19); // Rich Dark Navy
+scene.background = new THREE.Color(0x0B0F19);
+scene.fog = new THREE.FogExp2(0x0B0F19, 0.004);
 
 const width = container.clientWidth || window.innerWidth;
 const height = container.clientHeight || window.innerHeight;
 
-// 2. Camera
-const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 2000);
-camera.position.set(40, 50, 60);
+// Camera
+const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 1000);
+camera.position.set(35, 40, 50);
 
-// 3. Renderer
+// Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(width, height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
 container.appendChild(renderer.domElement);
 
-// 4. Controls
+// Controls
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.maxPolarAngle = Math.PI / 2 - 0.02;
+controls.dampingFactor = 0.06;
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+controls.minDistance = 10;
+controls.maxDistance = 200;
 controls.target.set(0, 10, 0);
 
-// 5. Lighting (Bright & Clear)
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+// ──────────────────────────────────────────────────────────
+// 2. POST-PROCESSING (Bloom)
+// ──────────────────────────────────────────────────────────
+let composer = null;
+try {
+    const renderPass = new THREE.RenderPass(scene, camera);
+    const bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(width, height), 0.4, 0.6, 0.85
+    );
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+} catch (e) {
+    console.warn('Post-processing unavailable, falling back to standard renderer:', e.message);
+}
+
+// ──────────────────────────────────────────────────────────
+// 3. LIGHTING
+// ──────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0xb0c4de, 0.6);
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-dirLight.position.set(0, 200, 100);
+const hemiLight = new THREE.HemisphereLight(0x6088c6, 0x1a1a2e, 0.5);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xffeedd, 1.6);
+dirLight.position.set(40, 100, 60);
 dirLight.castShadow = true;
-dirLight.shadow.camera.left = -150;
-dirLight.shadow.camera.right = 150;
-dirLight.shadow.camera.top = 150;
-dirLight.shadow.camera.bottom = -150;
+dirLight.shadow.camera.left = -60;
+dirLight.shadow.camera.right = 60;
+dirLight.shadow.camera.top = 60;
+dirLight.shadow.camera.bottom = -60;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 250;
 dirLight.shadow.mapSize.width = 2048;
 dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.bias = -0.0005;
 scene.add(dirLight);
 
-const secondaryLight = new THREE.DirectionalLight(0x3B82F6, 0.8);
-secondaryLight.position.set(-100, 50, -100);
-scene.add(secondaryLight);
+const fillLight = new THREE.DirectionalLight(0x4488ff, 0.4);
+fillLight.position.set(-30, 20, -40);
+scene.add(fillLight);
 
-// 6. Ground Grid
-const gridHelper = new THREE.GridHelper(300, 60, 0x3B82F6, 0x1F2937);
-gridHelper.position.y = 0;
+const rimLight = new THREE.PointLight(0x3B82F6, 0.6, 100);
+rimLight.position.set(0, 50, -30);
+scene.add(rimLight);
+
+// ──────────────────────────────────────────────────────────
+// 4. GROUND PLANE & GRID
+// ──────────────────────────────────────────────────────────
+const gridHelper = new THREE.GridHelper(120, 40, 0x1E3A5F, 0x111827);
+gridHelper.position.y = -0.01;
 scene.add(gridHelper);
 
-// Ground plane for shadows
-const groundGeo = new THREE.PlaneGeometry(500, 500);
-const groundMat = new THREE.ShadowMaterial({ opacity: 0.5 });
+const groundGeo = new THREE.PlaneGeometry(200, 200);
+const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x0d1117,
+    roughness: 0.95,
+    metalness: 0.05
+});
 const groundMesh = new THREE.Mesh(groundGeo, groundMat);
 groundMesh.rotation.x = -Math.PI / 2;
+groundMesh.position.y = -0.02;
 groundMesh.receiveShadow = true;
 scene.add(groundMesh);
 
-// Air Rights Ceiling
-const airRightsMat = new THREE.MeshBasicMaterial({ color: 0xFF0000, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
-const airRightsGeo = new THREE.PlaneGeometry(300, 300);
+// Air Rights Ceiling (hidden by default)
+const airRightsMat = new THREE.MeshBasicMaterial({
+    color: 0xFF4444, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+});
+const airRightsGeo = new THREE.PlaneGeometry(80, 80);
 const airRightsMesh = new THREE.Mesh(airRightsGeo, airRightsMat);
 airRightsMesh.rotation.x = -Math.PI / 2;
-airRightsMesh.position.y = 27.0; // sanctioned height limit
+airRightsMesh.position.y = 27.0;
 airRightsMesh.visible = false;
 scene.add(airRightsMesh);
 
-// 7. Groups & Materials
+// ──────────────────────────────────────────────────────────
+// 5. MATERIALS
+// ──────────────────────────────────────────────────────────
+const FLOOR_COLORS = [
+    0x1E40AF, 0x1D4ED8, 0x2563EB, 0x3B82F6,
+    0x1E3A8A, 0x1E40AF, 0x1D4ED8, 0x2563EB,
+    0x3B82F6, 0x60A5FA, 0x1E3A8A, 0x1D4ED8
+];
+
+function createFloorMaterial(floorIndex) {
+    const color = FLOOR_COLORS[floorIndex % FLOOR_COLORS.length];
+    return new THREE.MeshStandardMaterial({
+        color,
+        transparent: true,
+        opacity: 0.82,
+        roughness: 0.25,
+        metalness: 0.15,
+        side: THREE.DoubleSide
+    });
+}
+
+const materialSelected = new THREE.MeshStandardMaterial({
+    color: 0x10B981,
+    emissive: 0x10B981,
+    emissiveIntensity: 0.5,
+    transparent: true,
+    opacity: 0.95,
+    roughness: 0.2,
+    metalness: 0.1,
+    side: THREE.DoubleSide
+});
+
+const materialHover = new THREE.MeshStandardMaterial({
+    color: 0x60A5FA,
+    emissive: 0x3B82F6,
+    emissiveIntensity: 0.3,
+    transparent: true,
+    opacity: 0.9,
+    roughness: 0.2,
+    metalness: 0.1,
+    side: THREE.DoubleSide
+});
+
+const basementMaterial = new THREE.MeshStandardMaterial({
+    color: 0x374151,
+    transparent: true,
+    opacity: 0.6,
+    roughness: 0.8,
+    metalness: 0.05,
+    side: THREE.DoubleSide
+});
+
+const edgeMaterial = new THREE.LineBasicMaterial({
+    color: 0x38BDF8,
+    transparent: true,
+    opacity: 0.6
+});
+
+// ──────────────────────────────────────────────────────────
+// 6. BUILDING GROUP & STATE
+// ──────────────────────────────────────────────────────────
 const buildingGroup = new THREE.Group();
 buildingGroup.name = 'buildings';
 scene.add(buildingGroup);
@@ -77,247 +180,353 @@ const parcelGroup = new THREE.Group();
 parcelGroup.name = 'parcels';
 scene.add(parcelGroup);
 
-const units = [];
+let units = [];
+let currentBuildingIndex = 0;
+let currentBuildingData = null;
 
-const materialDefault = new THREE.MeshStandardMaterial({
-    color: 0x1E40AF,
-    transparent: true,
-    opacity: 0.8,
-    roughness: 0.3,
-    metalness: 0.2
-});
-const materialSelected = new THREE.MeshStandardMaterial({
-    color: 0x10B981,
-    emissive: 0x10B981,
-    emissiveIntensity: 0.8,
-    transparent: true,
-    opacity: 0.95
-});
-const materialHover = new THREE.MeshStandardMaterial({
-    color: 0x3B82F6,
-    transparent: true,
-    opacity: 0.9
-});
+// Coordinate conversion constants (at ~20°N latitude)
+const DEG_TO_METERS_LAT = 111320;
+const DEG_TO_METERS_LNG = 111320 * Math.cos(20.0 * Math.PI / 180);
 
-// Scale factor to convert lat/long degrees to Three.js meters
-const centerLng = 73.7898;
-const centerLat = 19.9975;
-const coordScale = 100000;
+// ──────────────────────────────────────────────────────────
+// 7. BUILDING RENDERING — THE CORE FIX
+// ──────────────────────────────────────────────────────────
 
-// Hide Loading Overlay
-function hideLoading() {
-    const loader = document.getElementById('loading-spinner') || document.querySelector('.loading');
-    if (loader) loader.style.display = 'none';
+/**
+ * Convert a GeoJSON polygon ring to local-space XZ coordinates (meters).
+ * Subtracts the centroid so the building is centered at origin.
+ */
+function geoRingToLocalCoords(ring) {
+    // Compute centroid
+    let cLng = 0, cLat = 0, n = 0;
+    for (const coord of ring) {
+        if (!coord || isNaN(coord[0]) || isNaN(coord[1])) continue;
+        cLng += coord[0];
+        cLat += coord[1];
+        n++;
+    }
+    if (n === 0) return null;
+    cLng /= n;
+    cLat /= n;
+
+    // Convert to local meters relative to centroid
+    const points = [];
+    for (const coord of ring) {
+        if (!coord || isNaN(coord[0]) || isNaN(coord[1])) continue;
+        const x = (coord[0] - cLng) * DEG_TO_METERS_LNG;
+        const z = -(coord[1] - cLat) * DEG_TO_METERS_LAT;
+        points.push({ x, z });
+    }
+
+    return { points, centroidLng: cLng, centroidLat: cLat };
 }
 
-// Procedural Fallback Building (Guarantees demo works even if fetch fails)
-function createFallbackDemoTower() {
+/**
+ * Build a THREE.Shape from local coordinate points
+ */
+function createShapeFromPoints(points) {
+    if (points.length < 3) return null;
+    const shape = new THREE.Shape();
+    shape.moveTo(points[0].x, points[0].z);
+    for (let i = 1; i < points.length; i++) {
+        shape.lineTo(points[i].x, points[i].z);
+    }
+    shape.closePath();
+    return shape;
+}
+
+/**
+ * Split a bounding box into 4 quadrant shapes for multi-unit floors.
+ * For a polygon footprint, we create 4 sub-rectangles within the bounding box.
+ */
+function createUnitShapes(footprintShape, points) {
+    // Get bounding box of the footprint
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of points) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minZ = Math.min(minZ, p.z);
+        maxZ = Math.max(maxZ, p.z);
+    }
+
+    const midX = (minX + maxX) / 2;
+    const midZ = (minZ + maxZ) / 2;
+    const gap = 0.3; // Gap between units
+
+    const quadrants = [
+        { label: 'A', x1: minX, x2: midX - gap, z1: minZ, z2: midZ - gap },
+        { label: 'B', x1: midX + gap, x2: maxX, z1: minZ, z2: midZ - gap },
+        { label: 'C', x1: minX, x2: midX - gap, z1: midZ + gap, z2: maxZ },
+        { label: 'D', x1: midX + gap, x2: maxX, z1: midZ + gap, z2: maxZ },
+    ];
+
+    return quadrants.map(q => {
+        const shape = new THREE.Shape();
+        shape.moveTo(q.x1, q.z1);
+        shape.lineTo(q.x2, q.z1);
+        shape.lineTo(q.x2, q.z2);
+        shape.lineTo(q.x1, q.z2);
+        shape.closePath();
+        return { shape, label: q.label, centerX: (q.x1 + q.x2) / 2, centerZ: (q.z1 + q.z2) / 2 };
+    });
+}
+
+/**
+ * Clear the current building from the scene
+ */
+function clearBuilding() {
+    while (buildingGroup.children.length > 0) {
+        const child = buildingGroup.children[0];
+        buildingGroup.remove(child);
+        child.traverse(obj => {
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) {
+                if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                else obj.material.dispose();
+            }
+        });
+    }
+    units = [];
+}
+
+/**
+ * MAIN: Render a single building into the scene
+ */
+function renderBuilding(buildingData) {
+    clearBuilding();
+    currentBuildingData = buildingData;
+
+    const geom = buildingData.footprint_geojson || buildingData.boundary_geojson;
+    if (!geom) {
+        console.error('No GeoJSON geometry for building:', buildingData.id);
+        return;
+    }
+
+    // Extract ring
+    let ring = null;
+    if (geom.type === 'Polygon' && geom.coordinates?.length > 0) {
+        ring = geom.coordinates[0];
+    } else if (geom.type === 'MultiPolygon' && geom.coordinates?.length > 0) {
+        ring = geom.coordinates[0][0];
+    }
+    if (!ring || ring.length < 3) return;
+
+    // Convert to local coords
+    const local = geoRingToLocalCoords(ring);
+    if (!local) return;
+
+    const { points } = local;
+    const footprintShape = createShapeFromPoints(points);
+    if (!footprintShape) return;
+
+    // Get building dimensions from bounding box
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of points) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minZ = Math.min(minZ, p.z);
+        maxZ = Math.max(maxZ, p.z);
+    }
+    const bldgWidth = maxX - minX;
+    const bldgDepth = maxZ - minZ;
+
+    const numFloors = parseInt(buildingData.total_floors) || (Math.floor(Math.random() * 5) + 4);
+    const floorHeight = 3.0;
+    const totalHeight = numFloors * floorHeight;
+    const ulpin2d = buildingData.parcel_id || buildingData.ulpin_2d || `14MH27${buildingData.id?.slice(-4) || '0001'}`;
+
+    // Create unit shapes (4 per floor)
+    const unitShapes = createUnitShapes(footprintShape, points);
+    const extrudeSettings = { depth: floorHeight - 0.3, bevelEnabled: false };
+
     const bGroup = new THREE.Group();
-    const floors = 10;
-    const floorH = 3.0;
-    const bW = 22;
-    const bD = 18;
 
-    for (let f = 1; f <= floors; f++) {
-        const y = (f - 1) * floorH;
-        const offsets = [
-            { num: 1, x: -bW / 4, z: -bD / 4 },
-            { num: 2, x:  bW / 4, z: -bD / 4 },
-            { num: 3, x: -bW / 4, z:  bD / 4 },
-            { num: 4, x:  bW / 4, z:  bD / 4 }
-        ];
+    // === BASEMENT ===
+    const basementExtrudeSettings = { depth: 2.8, bevelEnabled: false };
+    const basementGeo = new THREE.ExtrudeGeometry(footprintShape, basementExtrudeSettings);
+    const basementMesh = new THREE.Mesh(basementGeo, basementMaterial.clone());
+    basementMesh.rotation.x = -Math.PI / 2;
+    basementMesh.position.y = -3.0;
+    basementMesh.castShadow = true;
+    basementMesh.receiveShadow = true;
+    basementMesh.userData = {
+        isBasement: true,
+        floorIndex: 0,
+        originalY: -3.0,
+        targetY: -3.0
+    };
 
-        offsets.forEach(u => {
-            const geo = new THREE.BoxGeometry(bW / 2 - 0.5, floorH - 0.2, bD / 2 - 0.5);
-            const mesh = new THREE.Mesh(geo, materialDefault.clone());
-            mesh.position.set(u.x, y + floorH / 2, u.z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
+    const basementEdges = new THREE.EdgesGeometry(basementGeo);
+    const basementLines = new THREE.LineSegments(basementEdges, edgeMaterial.clone());
+    basementMesh.add(basementLines);
+    bGroup.add(basementMesh);
 
-            const floorNumber = f;
-            const unitNumber = `${f}0${u.num}`;
-            const zBottom = y;
-            const zTop = y + floorH;
+    // === FLOORS ===
+    for (let f = 0; f < numFloors; f++) {
+        const floorY = f * floorHeight;
 
-            mesh.userData = {
+        unitShapes.forEach((uData, uIdx) => {
+            const unitGeo = new THREE.ExtrudeGeometry(uData.shape, extrudeSettings);
+            const mat = createFloorMaterial(f);
+            const unitMesh = new THREE.Mesh(unitGeo, mat);
+            unitMesh.rotation.x = -Math.PI / 2;
+            unitMesh.position.y = floorY;
+            unitMesh.castShadow = true;
+            unitMesh.receiveShadow = true;
+
+            const floorNumber = f + 1;
+            const unitNumber = `${floorNumber}0${uIdx + 1}`;
+            const zBottom = floorY;
+            const zTop = floorY + floorHeight;
+
+            unitMesh.userData = {
                 isUnit: true,
                 floorNumber,
                 unitNumber,
+                unitLabel: uData.label,
                 zBottom,
                 zTop,
-                owner: f % 2 === 0 ? "Ramesh Patil" : "Sunita Deshmukh",
-                carpetArea: 780 + (u.num * 30),
-                parking: `P-${f * 2 + u.num}`,
-                hasLien: f === 4,
-                originalMaterial: materialDefault.clone(),
+                owner: `Owner ${unitNumber}`,
+                carpetArea: Math.round((bldgWidth * bldgDepth / 4) * 10.764), // sq ft
+                parking: `P-${floorNumber * 4 + uIdx + 1}`,
+                hasLien: f === 3 && uIdx === 0,
+                originalMaterial: mat.clone(),
                 ulpin3d: generate3DUlpin({
-                    parcelUlpin2d: '14MH2704291845',
+                    parcelUlpin2d: ulpin2d,
                     floorNumber,
                     unitNumber,
                     elevationBottomZ: zBottom,
                     elevationTopZ: zTop
                 }),
-                originalY: y + floorH / 2,
-                floorIndex: f,
-                targetY: y + floorH / 2
+                originalY: floorY,
+                floorIndex: f + 1,
+                targetY: floorY
             };
 
-            const edges = new THREE.EdgesGeometry(geo);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x38BDF8 }));
-            mesh.add(line);
+            // Edge wireframe
+            const edges = new THREE.EdgesGeometry(unitGeo);
+            const line = new THREE.LineSegments(edges, edgeMaterial.clone());
+            unitMesh.add(line);
 
-            units.push(mesh);
-            bGroup.add(mesh);
+            units.push(unitMesh);
+            bGroup.add(unitMesh);
         });
     }
 
-    // Add Basement
-    const baseGeo = new THREE.BoxGeometry(bW + 4, 3, bD + 4);
-    const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({ color: 0x374151, transparent: true, opacity: 0.6 }));
-    baseMesh.position.set(0, -1.5, 0);
-    baseMesh.receiveShadow = true;
-    baseMesh.userData = { originalY: -1.5, targetY: -1.5, floorIndex: 0 };
-    bGroup.add(baseMesh);
+    // === ROOF ===
+    const roofGeo = new THREE.ExtrudeGeometry(footprintShape, { depth: 0.4, bevelEnabled: false });
+    const roofMat = new THREE.MeshStandardMaterial({
+        color: 0x1F2937, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide
+    });
+    const roofMesh = new THREE.Mesh(roofGeo, roofMat);
+    roofMesh.rotation.x = -Math.PI / 2;
+    roofMesh.position.y = totalHeight;
+    roofMesh.castShadow = true;
+    roofMesh.userData = {
+        floorIndex: numFloors + 1,
+        originalY: totalHeight,
+        targetY: totalHeight
+    };
+    const roofEdges = new THREE.EdgesGeometry(roofGeo);
+    roofMesh.add(new THREE.LineSegments(roofEdges, edgeMaterial.clone()));
+    bGroup.add(roofMesh);
 
     buildingGroup.add(bGroup);
+
+    // === POSITION CAMERA ===
+    const maxBldgDim = Math.max(bldgWidth, bldgDepth, totalHeight);
+    const camDist = Math.max(maxBldgDim * 1.8, 30);
+
+    controls.target.set(0, totalHeight * 0.4, 0);
+    camera.position.set(camDist * 0.7, camDist * 0.6, camDist * 0.8);
+    camera.lookAt(controls.target);
+    controls.update();
+
+    // Update air-rights plane position
+    airRightsMesh.position.y = totalHeight + 3;
+
+    // === DISPATCH STATS ===
+    window.dispatchEvent(new CustomEvent('stats-update', {
+        detail: {
+            parcels: getBuildingsList().length,
+            floors: numFloors,
+            units: units.length
+        }
+    }));
+
+    // Update building info in status bar
+    const activeIdEl = document.getElementById('activeParcelId');
+    if (activeIdEl) activeIdEl.textContent = ulpin2d;
 }
 
-// Main Data Loading & Building Extrusion
+// ──────────────────────────────────────────────────────────
+// 8. INITIALIZATION
+// ──────────────────────────────────────────────────────────
 (async () => {
     try {
-        console.log('Scene3D: Starting data load...');
-        
-        let parcels = [];
-        try { parcels = await fetchParcels(); } catch (e) { console.warn("Fetch parcels failed", e); }
+        console.log('Scene3D: Loading building data...');
+        const buildings = await fetchBuildings();
 
-        let buildings = [];
-        try { buildings = await fetchBuildings(); } catch (e) { console.warn("Fetch buildings failed", e); }
-
-        // If buildings are empty, check if parcels have building polygons to extrude
-        const rawBuildingData = (buildings && buildings.length > 0) ? buildings : parcels;
-
-        if (rawBuildingData && rawBuildingData.length > 0) {
-            rawBuildingData.forEach((item, bIdx) => {
-                // Accepts BOTH footprint_geojson and boundary_geojson:
-                const geom = item.footprint_geojson || item.boundary_geojson;
-                if (!geom) return;
-
-                let ring = null;
-                if (geom.type === 'Polygon' && geom.coordinates?.length > 0) {
-                    ring = geom.coordinates[0];
-                } else if (geom.type === 'MultiPolygon' && geom.coordinates?.length > 0) {
-                    ring = geom.coordinates[0][0];
-                }
-
-                if (!ring || ring.length < 3) return;
-
-                const shape = new THREE.Shape();
-                let validCoords = 0;
-
-                ring.forEach((coord, idx) => {
-                    if (!coord || isNaN(coord[0]) || isNaN(coord[1])) return;
-                    const x = (coord[0] - centerLng) * coordScale;
-                    const z = -(coord[1] - centerLat) * coordScale;
-                    
-                    if (idx === 0) shape.moveTo(x, -z);
-                    else shape.lineTo(x, -z);
-                    validCoords++;
-                });
-
-                if (validCoords < 3) return;
-
-                let numFloors = parseInt(item.total_floors) || (Math.floor(Math.random() * 4) + 4);
-                const floorHeight = 3.0;
-
-                const extrudeSettings = { depth: floorHeight - 0.2, bevelEnabled: false };
-                const floorGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                const bGroup = new THREE.Group();
-
-                for (let i = 0; i < numFloors; i++) {
-                    const unitMesh = new THREE.Mesh(floorGeo, materialDefault.clone());
-                    unitMesh.rotation.x = -Math.PI / 2;
-                    unitMesh.position.y = i * floorHeight;
-                    unitMesh.castShadow = true;
-                    unitMesh.receiveShadow = true;
-
-                    const floorNumber = i + 1;
-                    const unitNumber = `${floorNumber}01`;
-                    const zBottom = i * floorHeight;
-                    const zTop = (i + 1) * floorHeight;
-
-                    unitMesh.userData = {
-                        isUnit: true,
-                        floorNumber,
-                        unitNumber,
-                        zTop,
-                        zBottom,
-                        owner: `Owner ${unitNumber}`,
-                        carpetArea: 750,
-                        parking: `P-${floorNumber}`,
-                        hasLien: false,
-                        originalMaterial: materialDefault.clone(),
-                        ulpin3d: generate3DUlpin({
-                            parcelUlpin2d: item.ulpin_2d || `14MH27${1000 + bIdx}`,
-                            floorNumber,
-                            unitNumber,
-                            elevationBottomZ: zBottom,
-                            elevationTopZ: zTop
-                        }),
-                        originalY: i * floorHeight,
-                        floorIndex: i,
-                        targetY: i * floorHeight
-                    };
-
-                    const edges = new THREE.EdgesGeometry(floorGeo);
-                    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x38BDF8 }));
-                    unitMesh.add(line);
-
-                    units.push(unitMesh);
-                    bGroup.add(unitMesh);
-                }
-                buildingGroup.add(bGroup);
-            });
+        if (buildings && buildings.length > 0) {
+            // Populate building selector
+            populateBuildingSelector(buildings);
+            // Render the first building
+            renderBuilding(buildings[0]);
         }
-
-        // If still no buildings created, load demo tower
-        if (units.length === 0) {
-            console.log("No GeoJSON buildings in view, loading demo tower...");
-            createFallbackDemoTower();
-        }
-
-        // Center Camera on Loaded Buildings
-        const box = new THREE.Box3().setFromObject(buildingGroup);
-        if (!box.isEmpty()) {
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z, 40);
-
-            controls.target.copy(center);
-            camera.position.set(center.x + maxDim * 1.2, center.y + maxDim * 1.0, center.z + maxDim * 1.2);
-            camera.lookAt(center);
-            controls.update();
-        }
-
-        // Dispatch updated stats
-        let totalFloors = 0;
-        buildingGroup.children.forEach(bg => {
-            totalFloors = Math.max(totalFloors, bg.children.length);
-        });
-        window.dispatchEvent(new CustomEvent('stats-update', { 
-            detail: { parcels: buildingGroup.children.length, floors: totalFloors, units: units.length } 
-        }));
-
     } catch (err) {
-        console.error('Error in Scene3D init:', err);
-        if (units.length === 0) createFallbackDemoTower();
+        console.error('Scene3D: Critical error during init:', err);
     } finally {
-        hideLoading();
-        console.log('Scene3D: Scene Ready.');
+        // Hide loading overlay
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.classList.add('hidden');
         window.dispatchEvent(new CustomEvent('scene-ready'));
+        console.log('Scene3D: Ready.');
     }
 })();
 
-// Raycasting Interaction (Click flat -> Highlight & open inspector)
+/**
+ * Populate the building selector dropdown in the sidebar
+ */
+function populateBuildingSelector(buildings) {
+    const selector = document.getElementById('buildingSelector');
+    if (!selector) return;
+
+    selector.innerHTML = '';
+    buildings.forEach((b, i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        const label = b.address || b.parcel_id || b.id || `Building ${i + 1}`;
+        const floors = b.total_floors || '?';
+        option.textContent = `${label} (${floors}F)`;
+        selector.appendChild(option);
+    });
+
+    selector.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.value);
+        currentBuildingIndex = idx;
+        const list = getBuildingsList();
+        if (list[idx]) renderBuilding(list[idx]);
+    });
+}
+
+// Building navigation via events
+window.addEventListener('navigate-building', (e) => {
+    const dir = e.detail; // 'next' or 'prev'
+    const list = getBuildingsList();
+    if (dir === 'next') {
+        currentBuildingIndex = (currentBuildingIndex + 1) % list.length;
+    } else {
+        currentBuildingIndex = (currentBuildingIndex - 1 + list.length) % list.length;
+    }
+    renderBuilding(list[currentBuildingIndex]);
+
+    const selector = document.getElementById('buildingSelector');
+    if (selector) selector.value = currentBuildingIndex;
+});
+
+// ──────────────────────────────────────────────────────────
+// 9. RAYCASTING & INTERACTION
+// ──────────────────────────────────────────────────────────
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let hoveredUnit = null;
@@ -334,13 +543,13 @@ function getIntersectedUnit(clientX, clientY) {
 
 export function selectUnitMesh(unitMesh) {
     if (!unitMesh) return;
-    if (selectedUnit) {
+    // Deselect previous
+    if (selectedUnit && selectedUnit !== unitMesh) {
         selectedUnit.material.copy(selectedUnit.userData.originalMaterial);
     }
     selectedUnit = unitMesh;
     selectedUnit.material.copy(materialSelected);
 
-    // Open Property Inspector Panel
     window.dispatchEvent(new CustomEvent('unit-selected', { detail: selectedUnit.userData }));
 }
 
@@ -353,21 +562,24 @@ renderer.domElement.addEventListener('mousemove', (e) => {
     const hit = getIntersectedUnit(e.clientX, e.clientY);
     if (hit) {
         if (hoveredUnit !== hit) {
-            if (hoveredUnit && hoveredUnit !== selectedUnit) hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+            if (hoveredUnit && hoveredUnit !== selectedUnit) {
+                hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+            }
             hoveredUnit = hit;
             if (hoveredUnit !== selectedUnit) hoveredUnit.material.copy(materialHover);
             renderer.domElement.style.cursor = 'pointer';
         }
     } else {
-        if (hoveredUnit && hoveredUnit !== selectedUnit) hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+        if (hoveredUnit && hoveredUnit !== selectedUnit) {
+            hoveredUnit.material.copy(hoveredUnit.userData.originalMaterial);
+        }
         hoveredUnit = null;
         renderer.domElement.style.cursor = 'grab';
     }
 });
 
-// Touch tap selection for mobile devices
-let touchStartX = 0;
-let touchStartY = 0;
+// Touch support
+let touchStartX = 0, touchStartY = 0;
 renderer.domElement.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
         touchStartX = e.touches[0].clientX;
@@ -386,11 +598,13 @@ renderer.domElement.addEventListener('touchend', (e) => {
     }
 }, { passive: true });
 
-// Select unit by search event
+// ──────────────────────────────────────────────────────────
+// 10. SEARCH / UNIT SELECTION BY EVENT
+// ──────────────────────────────────────────────────────────
 window.addEventListener('select-unit', (e) => {
     const targetUlpin = e.detail?.ulpin3d;
     const targetNum = e.detail?.unitNumber;
-    const match = units.find(u => 
+    const match = units.find(u =>
         (targetUlpin && u.userData.ulpin3d === targetUlpin) ||
         (targetNum && u.userData.unitNumber === targetNum)
     );
@@ -398,15 +612,15 @@ window.addEventListener('select-unit', (e) => {
         selectUnitMesh(match);
         const pos = new THREE.Vector3();
         match.getWorldPosition(pos);
-        camera.position.set(pos.x + 20, pos.y + 20, pos.z + 20);
+        camera.position.set(pos.x + 15, pos.y + 10, pos.z + 15);
         controls.target.copy(pos);
         controls.update();
-    } else {
-        console.warn('No matching 3D Unit or Parcel found.');
     }
 });
 
-// UI Event Listeners for Layer Toggles
+// ──────────────────────────────────────────────────────────
+// 11. UI EVENT LISTENERS
+// ──────────────────────────────────────────────────────────
 window.addEventListener('toggle-buildings', (e) => {
     buildingGroup.visible = e.detail;
 });
@@ -414,7 +628,7 @@ window.addEventListener('toggle-buildings', (e) => {
 window.addEventListener('toggle-basements', (e) => {
     buildingGroup.children.forEach(bGroup => {
         bGroup.children.forEach(floor => {
-            if (floor.userData.floorIndex === 0 || floor.userData.originalY < 0) {
+            if (floor.userData.isBasement || floor.userData.originalY < 0) {
                 floor.visible = e.detail;
             }
         });
@@ -422,18 +636,20 @@ window.addEventListener('toggle-basements', (e) => {
 });
 
 window.addEventListener('toggle-parcels', (e) => {
-    if (parcelGroup) parcelGroup.visible = e.detail;
+    parcelGroup.visible = e.detail;
 });
 
-window.addEventListener('toggle-amenities', (e) => {
-    if (typeof amenityGroup !== 'undefined' && amenityGroup) amenityGroup.visible = e.detail;
+window.addEventListener('toggle-amenities', () => {
+    // Amenities layer placeholder
 });
 
 window.addEventListener('filter-floors', (e) => {
     const maxFloor = e.detail;
     buildingGroup.children.forEach(bGroup => {
         bGroup.children.forEach(floor => {
-            floor.visible = maxFloor === 0 || floor.userData.floorIndex <= maxFloor;
+            if (floor.userData.floorIndex !== undefined) {
+                floor.visible = maxFloor >= 9 || floor.userData.floorIndex <= maxFloor;
+            }
         });
     });
 });
@@ -441,11 +657,15 @@ window.addEventListener('filter-floors', (e) => {
 window.addEventListener('time-change', (e) => {
     const time = e.detail; // 6 to 18
     const angle = ((time - 6) / 12) * Math.PI - (Math.PI / 2);
-    const radius = 200;
+    const radius = 100;
     dirLight.position.x = radius * Math.sin(angle);
-    dirLight.position.y = radius * Math.cos(angle);
-    dirLight.position.z = 100;
-    dirLight.intensity = Math.max(0.1, Math.cos(angle) * 1.5);
+    dirLight.position.y = Math.abs(radius * Math.cos(angle));
+    dirLight.position.z = 60;
+    dirLight.intensity = Math.max(0.3, Math.cos(angle) * 1.6);
+
+    // Warm sunrise/sunset vs cool midday
+    const warmth = 1.0 - Math.abs(time - 12) / 6;
+    dirLight.color.setHSL(0.08 + warmth * 0.03, 0.5, 0.7 + warmth * 0.2);
 });
 
 window.addEventListener('toggle-air-rights', (e) => {
@@ -456,38 +676,43 @@ window.addEventListener('balcony-view', () => {
     if (selectedUnit) {
         const box = new THREE.Box3().setFromObject(selectedUnit);
         const center = box.getCenter(new THREE.Vector3());
-        
-        // Position camera inside the unit, looking outward (+x, +z direction)
-        camera.position.set(center.x, center.y, center.z + 5);
-        controls.target.set(center.x + 20, center.y - 5, center.z + 20); // Look outwards and slightly down
+        camera.position.set(center.x, center.y, center.z + 3);
+        controls.target.set(center.x + 20, center.y - 3, center.z + 25);
         controls.update();
-    } else {
-        alert("Select a unit first to view from its balcony.");
     }
 });
 
+// ──────────────────────────────────────────────────────────
+// 12. EXPLODED VIEW
+// ──────────────────────────────────────────────────────────
 let isExploded = false;
 const explodeBtn = document.getElementById('explodeBtn');
 const mobileExplodeBtn = document.getElementById('mobileExplodeBtn');
 
 function toggleExplodedView() {
     isExploded = !isExploded;
-    const spacing = isExploded ? 3.0 : 0;
+    const spacing = isExploded ? 4.0 : 0;
     if (explodeBtn) explodeBtn.classList.toggle('active', isExploded);
     if (mobileExplodeBtn) mobileExplodeBtn.classList.toggle('active', isExploded);
 
     buildingGroup.children.forEach(bGroup => {
         bGroup.children.forEach((floor, idx) => {
-            floor.userData.targetY = floor.userData.originalY + (idx * spacing);
+            if (floor.userData.originalY !== undefined) {
+                floor.userData.targetY = floor.userData.originalY + (idx * spacing);
+            }
         });
     });
 }
+
 if (explodeBtn) explodeBtn.addEventListener('click', toggleExplodedView);
 if (mobileExplodeBtn) mobileExplodeBtn.addEventListener('click', toggleExplodedView);
 
-// Camera Controls (Orbit / Pan / Reset)
+// ──────────────────────────────────────────────────────────
+// 13. CAMERA CONTROLS
+// ──────────────────────────────────────────────────────────
 const btnOrbit = document.getElementById('btnOrbit');
 const btnPan = document.getElementById('btnPan');
+
 if (btnOrbit && btnPan) {
     btnOrbit.addEventListener('click', () => {
         btnOrbit.classList.add('active');
@@ -495,7 +720,6 @@ if (btnOrbit && btnPan) {
         controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
         if (controls.touches) controls.touches.ONE = THREE.TOUCH.ROTATE;
     });
-
     btnPan.addEventListener('click', () => {
         btnPan.classList.add('active');
         btnOrbit.classList.remove('active');
@@ -510,50 +734,64 @@ if (btnReset) {
         const box = new THREE.Box3().setFromObject(buildingGroup);
         if (!box.isEmpty()) {
             const center = box.getCenter(new THREE.Vector3());
-            camera.position.set(center.x + 40, center.y + 50, center.z + 60);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z, 20);
+            camera.position.set(maxDim * 0.7, maxDim * 0.6, maxDim * 0.8);
             controls.target.copy(center);
             controls.update();
         }
     });
 }
 
-// Shake unit on conflict
+// Shake animation on conflict
 window.addEventListener('shake-unit', () => {
     if (selectedUnit) {
         const originalX = selectedUnit.position.x;
         let count = 0;
         const interval = setInterval(() => {
-            selectedUnit.position.x = originalX + (Math.random() - 0.5) * 1.5;
+            selectedUnit.position.x = originalX + (Math.random() - 0.5) * 1.0;
             count++;
-            if (count > 10) {
+            if (count > 12) {
                 clearInterval(interval);
                 selectedUnit.position.x = originalX;
             }
-        }, 30);
+        }, 25);
     }
 });
 
+// ──────────────────────────────────────────────────────────
+// 14. RESIZE
+// ──────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    if (composer) composer.setSize(w, h);
 });
 
-// Animation Render Loop
+// ──────────────────────────────────────────────────────────
+// 15. ANIMATION LOOP
+// ──────────────────────────────────────────────────────────
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
 
+    // Smooth exploded-view interpolation
     buildingGroup.children.forEach(bGroup => {
         bGroup.children.forEach(floor => {
             if (floor.userData.targetY !== undefined) {
-                floor.position.y += (floor.userData.targetY - floor.position.y) * 0.1;
+                floor.position.y += (floor.userData.targetY - floor.position.y) * 0.08;
             }
         });
     });
 
-    renderer.render(scene, camera);
+    // Render with post-processing if available, otherwise standard
+    if (composer) {
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
 }
 animate();

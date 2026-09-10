@@ -33,7 +33,48 @@ export async function fetchAmenities() {
     }
 }
 
+// Cached building list for navigation
+let _buildingsCache = null;
+
+const FALLBACK_BUILDINGS = [
+    {
+        id: 'demo-tower-A',
+        parcel_id: '14MH2704291845',
+        address: 'Plot A, Nashik Rd',
+        total_floors: 8,
+        height_meters: 24,
+        footprint_geojson: {
+            type: 'Polygon',
+            coordinates: [[
+                [73.78960, 19.99740],
+                [73.78985, 19.99740],
+                [73.78985, 19.99760],
+                [73.78960, 19.99760],
+                [73.78960, 19.99740]
+            ]]
+        }
+    },
+    {
+        id: 'demo-tower-B',
+        parcel_id: '14MH2704291846',
+        address: 'Plot B, College Rd',
+        total_floors: 5,
+        height_meters: 15,
+        footprint_geojson: {
+            type: 'Polygon',
+            coordinates: [[
+                [73.79020, 19.99770],
+                [73.79045, 19.99770],
+                [73.79050, 19.99790],
+                [73.79015, 19.99795],
+                [73.79020, 19.99770]
+            ]]
+        }
+    }
+];
+
 export async function fetchBuildings() {
+    if (_buildingsCache) return _buildingsCache;
     try {
         const q = query(collection(db, 'buildings'), limit(50));
         const querySnapshot = await Promise.race([
@@ -50,26 +91,25 @@ export async function fetchBuildings() {
         });
         
         if (data.length === 0) throw new Error('No buildings found');
+        _buildingsCache = data;
         return data;
     } catch (error) {
-        console.warn('Firebase failed/empty, using fallback building:', error);
-        return [{
-            id: 'mock-building-1',
-            parcel_id: '14MH2704291845',
-            total_floors: 6,
-            height_meters: 18,
-            footprint_geojson: {
-                type: 'Polygon',
-                coordinates: [[
-                    [73.78980, 19.99750],
-                    [73.78990, 19.99750],
-                    [73.78990, 19.99760],
-                    [73.78980, 19.99760],
-                    [73.78980, 19.99750]
-                ]]
-            }
-        }];
+        console.warn('Firebase failed/empty, using fallback buildings:', error);
+        _buildingsCache = FALLBACK_BUILDINGS;
+        return FALLBACK_BUILDINGS;
     }
+}
+
+/** Get the cached building list (call fetchBuildings first) */
+export function getBuildingsList() {
+    return _buildingsCache || FALLBACK_BUILDINGS;
+}
+
+/** Fetch a single building by index from the cached list */
+export async function fetchSingleBuilding(index) {
+    const list = await fetchBuildings();
+    if (index < 0 || index >= list.length) return list[0];
+    return list[index];
 }
 
 export async function fetchParcels() {
@@ -277,6 +317,21 @@ if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeLeftSidebar)
 if (mobileExplodeBtn) {
     mobileExplodeBtn.addEventListener('click', () => {
         document.getElementById('explodeBtn')?.click();
+    });
+}
+
+// === BUILDING NAVIGATION ===
+const prevBuildingBtn = document.getElementById('prevBuildingBtn');
+const nextBuildingBtn = document.getElementById('nextBuildingBtn');
+
+if (prevBuildingBtn) {
+    prevBuildingBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('navigate-building', { detail: 'prev' }));
+    });
+}
+if (nextBuildingBtn) {
+    nextBuildingBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('navigate-building', { detail: 'next' }));
     });
 }
 
