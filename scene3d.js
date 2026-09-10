@@ -1,4 +1,4 @@
-import { generate3DUlpin, fetchBuildings, fetchSingleBuilding, getBuildingsList } from './app.js?v=2.0.0';
+import { generate3DUlpin, fetchBuildings, fetchSingleBuilding, getBuildingsList } from './app.js?v=2.1.0';
 
 // ──────────────────────────────────────────────────────────
 // 1. SCENE SETUP
@@ -15,24 +15,49 @@ const height = container.clientHeight || window.innerHeight;
 const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 1000);
 camera.position.set(35, 40, 50);
 
-// Renderer
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(width, height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-container.appendChild(renderer.domElement);
+// Renderer: Safe initialization with fallback flags & try/catch safety net
+let renderer;
+try {
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: "default",
+        failIfMajorPerformanceCaveat: false, // Prevents WebGL context failure on integrated GPUs
+        preserveDrawingBuffer: true
+    });
+} catch (e) {
+    console.warn("Retrying WebGL with minimal fallback settings...", e);
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+    } catch (e2) {
+        console.error("Critical: WebGL not supported or context could not be created.", e2);
+        const errBanner = document.createElement('div');
+        errBanner.style.cssText = 'position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(239,68,68,0.9); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.4); text-align: center;';
+        errBanner.innerHTML = '⚠️ <strong>WebGL Context Error:</strong> Hardware acceleration disabled or GPU context lost. Please enable hardware acceleration in browser settings.';
+        container.appendChild(errBanner);
+    }
+}
+
+if (renderer) {
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+}
 
 // Controls
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.maxPolarAngle = Math.PI / 2 - 0.05;
-controls.minDistance = 10;
-controls.maxDistance = 200;
-controls.target.set(0, 10, 0);
+const controls = renderer ? new THREE.OrbitControls(camera, renderer.domElement) : null;
+if (controls) {
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.minDistance = 10;
+    controls.maxDistance = 200;
+    controls.target.set(0, 10, 0);
+}
 
 // ──────────────────────────────────────────────────────────
 // 2. POST-PROCESSING (Bloom)
@@ -767,7 +792,7 @@ window.addEventListener('resize', () => {
     const h = container.clientHeight || window.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
+    if (renderer) renderer.setSize(w, h);
     if (composer) composer.setSize(w, h);
 });
 
@@ -776,7 +801,7 @@ window.addEventListener('resize', () => {
 // ──────────────────────────────────────────────────────────
 function animate() {
     requestAnimationFrame(animate);
-    controls.update();
+    if (controls) controls.update();
 
     // Smooth exploded-view interpolation
     buildingGroup.children.forEach(bGroup => {
@@ -790,7 +815,7 @@ function animate() {
     // Render with post-processing if available, otherwise standard
     if (composer) {
         composer.render();
-    } else {
+    } else if (renderer) {
         renderer.render(scene, camera);
     }
 }

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bhu-Aadhaar 3D — 3D Volumetric Land Administration</title>
     <meta name="description" content="3D ULPIN Property Viewer for India's Unique Land Parcel Identification Number system. Visualize buildings, units, and encumbrances in 3D.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='20' font-size='20'>🏢</text></svg>">
     <link rel="stylesheet" href="style.css">
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -269,6 +270,36 @@
                 <!-- Filled dynamically by app.js -->
             </div>
 
+            <!-- Dynamic Role Controls -->
+            <div id="dynamicRoleActions" class="role-actions-container" style="margin-bottom: 12px;">
+                <div id="bank-lien-control" class="role-control-box" style="display: none;">
+                    <div class="role-box-header">
+                        <span class="material-icons-round" style="color: #F59E0B;">account_balance</span>
+                        <strong>Bank Mortgage Portal</strong>
+                    </div>
+                    <p class="role-box-desc">Verify collateral and register legal financial encumbrances on 3D volumetric units.</p>
+                    <button id="lienBtn" class="btn btn-icon" style="border-color: #F59E0B; color: #F59E0B; width: 100%;">
+                        <span class="material-icons-round">gavel</span> Register Mortgage Lien (SBI/HDFC)
+                    </button>
+                </div>
+
+                <div id="officer-audit-control" class="role-control-box" style="display: none;">
+                    <div class="role-box-header">
+                        <span class="material-icons-round" style="color: #10B981;">admin_panel_settings</span>
+                        <strong>Revenue Officer Cadastral Audit</strong>
+                    </div>
+                    <p class="role-box-desc">Audit sanctioned vertical elevation limits (Z-axis) & sign mutation deeds.</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button id="auditBtn" class="btn btn-icon" style="border-color: #3B82F6; color: #3B82F6; width: 100%;">
+                            <span class="material-icons-round">policy</span> Audit Sanctioned Height (27m)
+                        </button>
+                        <button id="approveBtn" class="btn btn-icon" style="border-color: #10B981; color: #10B981; width: 100%;">
+                            <span class="material-icons-round">verified</span> Approve Property Mutation
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="action-group">
                 <button id="testFraudBtn" class="btn btn-icon" style="border-color: var(--conflict); color: var(--conflict); margin-bottom: 8px;">
                     <span class="material-icons-round">security</span>
@@ -351,7 +382,7 @@
     </div>
 
     <!-- Scripts -->
-    <script type="module" src="app.js?v=2.0.0"></script>
-    <script type="module" src="scene3d.js?v=2.0.0"></script>
+    <script type="module" src="app.js?v=2.1.0"></script>
+    <script type="module" src="scene3d.js?v=2.1.0"></script>
 </body>
 </html>

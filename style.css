@@ -1256,3 +1256,43 @@ button {
 .cesium-viewer-fullscreenContainer {
     display: none !important;
 }
+
+/* ===== DYNAMIC ROLE CONTROLS ===== */
+.role-actions-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.role-control-box {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    transition: all var(--transition);
+}
+
+.role-control-box:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.role-box-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.role-box-header .material-icons-round {
+    font-size: 1.15rem;
+}
+
+.role-box-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0 0 10px 0;
+}
